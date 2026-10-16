@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useToast } from '../components/Toast'
@@ -7,26 +7,82 @@ import { randomSuffix, slugify, toNumberOrNull } from '../lib/format'
 import { PRODUCTS_BUCKET, supabase } from '../lib/supabase'
 import type { Category } from '../lib/types'
 
-type VariantForm = {
-  key: string
+type ComboData = {
   id?: string
-  size: string
-  color: string
   price: string
   stock_quantity: string
   sku: string
   is_active: boolean
 }
 
-const newVariant = (): VariantForm => ({
-  key: crypto.randomUUID(),
-  size: '',
-  color: '',
-  price: '',
-  stock_quantity: '0',
-  sku: '',
-  is_active: true,
-})
+const comboKey = (color: string, size: string) => `${color}\u0000${size}`
+
+const emptyCombo = (): ComboData => ({ price: '', stock_quantity: '0', sku: '', is_active: true })
+
+const uniq = (arr: string[]) => Array.from(new Set(arr.map((x) => x.trim()).filter(Boolean)))
+
+function ChipsInput({
+  label,
+  hint,
+  items,
+  onChange,
+  placeholder,
+}: {
+  label: string
+  hint?: string
+  items: string[]
+  onChange: (next: string[]) => void
+  placeholder: string
+}) {
+  const [text, setText] = useState('')
+  const commit = () => {
+    const parts = text.split(/[,،\n]/).map((x) => x.trim()).filter(Boolean)
+    if (parts.length) onChange(uniq([...items, ...parts]))
+    setText('')
+  }
+  return (
+    <Field label={label} hint={hint}>
+      <div className="flex gap-2">
+        <input
+          className={inputCls}
+          value={text}
+          placeholder={placeholder}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ',' || e.key === '،') {
+              e.preventDefault()
+              commit()
+            }
+          }}
+          onBlur={commit}
+        />
+        <Button type="button" variant="secondary" onClick={commit}>
+          إضافة
+        </Button>
+      </div>
+      {items.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {items.map((it) => (
+            <span
+              key={it}
+              className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-3 py-1 text-sm font-semibold text-brand-700"
+            >
+              {it}
+              <button
+                type="button"
+                aria-label="حذف"
+                onClick={() => onChange(items.filter((x) => x !== it))}
+                className="text-brand-700/70 hover:text-rose-600"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </Field>
+  )
+}
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
@@ -39,6 +95,7 @@ export default function ProductForm() {
   const [loading, setLoading] = useState(isEdit)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [uploadingLanding, setUploadingLanding] = useState(false)
 
   const [categories, setCategories] = useState<Category[]>([])
   const [newCategory, setNewCategory] = useState('')
@@ -47,9 +104,6 @@ export default function ProductForm() {
   const [slug, setSlug] = useState('')
   const [slugTouched, setSlugTouched] = useState(false)
   const [description, setDescription] = useState('')
-  const [brand, setBrand] = useState('')
-  const [gender, setGender] = useState('')
-  const [ageRange, setAgeRange] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [basePrice, setBasePrice] = useState('')
   const [comparePrice, setComparePrice] = useState('')
@@ -58,7 +112,11 @@ export default function ProductForm() {
   const [images, setImages] = useState<string[]>([])
   const [isActive, setIsActive] = useState(true)
   const [isFeatured, setIsFeatured] = useState(false)
-  const [variants, setVariants] = useState<VariantForm[]>([])
+  const [landingImages, setLandingImages] = useState<string[]>([])
+  const [landingPosition, setLandingPosition] = useState<'above' | 'below'>('below')
+  const [colors, setColors] = useState<string[]>([])
+  const [sizes, setSizes] = useState<string[]>([])
+  const [combos, setCombos] = useState<Record<string, ComboData>>({})
   const [loadedVariantIds, setLoadedVariantIds] = useState<string[]>([])
 
   const loadCategories = async () => {
@@ -98,29 +156,31 @@ export default function ProductForm() {
       setSlug(p.slug)
       setSlugTouched(true)
       setDescription(p.description ?? '')
-      setBrand(p.brand ?? '')
-      setGender(p.gender ?? '')
-      setAgeRange(p.age_range ?? '')
       setCategoryId(p.category_id ?? '')
       setBasePrice(String(p.base_price ?? ''))
       setComparePrice(p.compare_at_price != null ? String(p.compare_at_price) : '')
       setCostPrice(p.cost_price != null ? String(p.cost_price) : '')
       setSku(p.sku ?? '')
       setImages(p.images ?? [])
+      setLandingImages(p.landing_images ?? [])
+      setLandingPosition(p.landing_position === 'above' ? 'above' : 'below')
       setIsActive(p.is_active)
       setIsFeatured(p.is_featured)
-      const loaded: VariantForm[] = (vs ?? []).map((v) => ({
-        key: v.id as string,
-        id: v.id as string,
-        size: v.size ?? '',
-        color: v.color ?? '',
-        price: v.price != null ? String(v.price) : '',
-        stock_quantity: String(v.stock_quantity ?? 0),
-        sku: v.sku ?? '',
-        is_active: v.is_active,
-      }))
-      setVariants(loaded)
-      setLoadedVariantIds(loaded.map((v) => v.id!))
+      const rows = vs ?? []
+      const map: Record<string, ComboData> = {}
+      for (const v of rows) {
+        map[comboKey((v.color ?? '').trim(), (v.size ?? '').trim())] = {
+          id: v.id as string,
+          price: v.price != null ? String(v.price) : '',
+          stock_quantity: String(v.stock_quantity ?? 0),
+          sku: v.sku ?? '',
+          is_active: v.is_active,
+        }
+      }
+      setColors(uniq(rows.map((v) => v.color ?? '')))
+      setSizes(uniq(rows.map((v) => v.size ?? '')))
+      setCombos(map)
+      setLoadedVariantIds(rows.map((v) => v.id as string))
       setLoading(false)
     })()
     return () => {
@@ -154,10 +214,9 @@ export default function ProductForm() {
     notify('تمت إضافة الفئة')
   }
 
-  const uploadFiles = async (files: FileList | null) => {
-    if (!files || files.length === 0) return
-    setUploading(true)
+  const uploadTo = async (files: FileList | null, folder: string): Promise<string[]> => {
     const added: string[] = []
+    if (!files) return added
     for (const file of Array.from(files)) {
       if (!file.type.startsWith('image/')) {
         notify(`«${file.name}» ليس صورة`, 'error')
@@ -168,7 +227,7 @@ export default function ProductForm() {
         continue
       }
       const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
-      const path = `products/${crypto.randomUUID()}.${ext}`
+      const path = `${folder}/${crypto.randomUUID()}.${ext}`
       const { error } = await supabase.storage
         .from(PRODUCTS_BUCKET)
         .upload(path, file, { contentType: file.type, cacheControl: '31536000' })
@@ -178,16 +237,50 @@ export default function ProductForm() {
       }
       added.push(supabase.storage.from(PRODUCTS_BUCKET).getPublicUrl(path).data.publicUrl)
     }
+    return added
+  }
+
+  const uploadFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return
+    setUploading(true)
+    const added = await uploadTo(files, 'products')
     if (added.length) setImages((prev) => [...prev, ...added])
     setUploading(false)
   }
+
+  const uploadLanding = async (files: FileList | null) => {
+    if (!files || files.length === 0) return
+    setUploadingLanding(true)
+    const added = await uploadTo(files, 'landing')
+    if (added.length) setLandingImages((prev) => [...prev, ...added])
+    setUploadingLanding(false)
+  }
+
+  const moveLanding = (i: number, dir: -1 | 1) =>
+    setLandingImages((prev) => {
+      const j = i + dir
+      if (j < 0 || j >= prev.length) return prev
+      const next = [...prev]
+      ;[next[i], next[j]] = [next[j], next[i]]
+      return next
+    })
+  const removeLanding = (i: number) => setLandingImages((prev) => prev.filter((_, idx) => idx !== i))
 
   const makeMain = (i: number) =>
     setImages((prev) => [prev[i], ...prev.filter((_, idx) => idx !== i)])
   const removeImage = (i: number) => setImages((prev) => prev.filter((_, idx) => idx !== i))
 
-  const updateVariant = (key: string, patch: Partial<VariantForm>) =>
-    setVariants((prev) => prev.map((v) => (v.key === key ? { ...v, ...patch } : v)))
+  // Every color × size pair; if only one list is filled, just that list.
+  const comboList = useMemo(() => {
+    if (colors.length === 0 && sizes.length === 0) return []
+    const cs = colors.length ? colors : ['']
+    const ss = sizes.length ? sizes : ['']
+    return cs.flatMap((color) => ss.map((size) => ({ color, size, key: comboKey(color, size) })))
+  }, [colors, sizes])
+
+  const getCombo = (key: string): ComboData => combos[key] ?? emptyCombo()
+  const updateCombo = (key: string, patch: Partial<ComboData>) =>
+    setCombos((prev) => ({ ...prev, [key]: { ...(prev[key] ?? emptyCombo()), ...patch } }))
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -196,7 +289,8 @@ export default function ProductForm() {
     if (!name.trim()) return notify('أدخل اسم المنتج', 'error')
     if (!slug.trim()) return notify('أدخل رابط المنتج (slug)', 'error')
     if (price === null || price < 0) return notify('أدخل سعراً صحيحاً', 'error')
-    for (const v of variants) {
+    for (const c of comboList) {
+      const v = getCombo(c.key)
       const stock = Number(v.stock_quantity)
       if (!Number.isInteger(stock) || stock < 0) {
         return notify('كمية المخزون يجب أن تكون عدداً صحيحاً موجباً', 'error')
@@ -212,15 +306,14 @@ export default function ProductForm() {
       name: name.trim(),
       slug: slug.trim(),
       description: description.trim() || null,
-      brand: brand.trim() || null,
-      gender: gender || null,
-      age_range: ageRange.trim() || null,
       category_id: categoryId || null,
       base_price: price,
       compare_at_price: toNumberOrNull(comparePrice),
       cost_price: toNumberOrNull(costPrice),
       sku: sku.trim() || null,
       images,
+      landing_images: landingImages,
+      landing_position: landingPosition,
       is_active: isActive,
       is_featured: isFeatured,
     }
@@ -244,17 +337,18 @@ export default function ProductForm() {
     }
 
     // Variants: delete removed, update existing, insert new.
-    const currentIds = variants.filter((v) => v.id).map((v) => v.id!)
-    const removedIds = loadedVariantIds.filter((vid) => !currentIds.includes(vid))
+    const keep = comboList.map((c) => getCombo(c.key).id).filter(Boolean) as string[]
+    const removedIds = loadedVariantIds.filter((vid) => !keep.includes(vid))
     if (removedIds.length) {
       const { error } = await supabase.from('lh_product_variants').delete().in('id', removedIds)
       if (error) return fail(error.message)
     }
-    for (const v of variants) {
+    for (const c of comboList) {
+      const v = getCombo(c.key)
       const row = {
         product_id: productId,
-        size: v.size.trim() || null,
-        color: v.color.trim() || null,
+        size: c.size || null,
+        color: c.color || null,
         price: toNumberOrNull(v.price),
         stock_quantity: Number(v.stock_quantity),
         sku: v.sku.trim() || null,
@@ -320,20 +414,6 @@ export default function ProductForm() {
                   onChange={(e) => setDescription(e.target.value)}
                 />
               </Field>
-              <Field label="العلامة التجارية">
-                <input className={inputCls} value={brand} onChange={(e) => setBrand(e.target.value)} />
-              </Field>
-              <Field label="الفئة العمرية" hint="مثال: 0-12 شهر، 3-5 سنوات">
-                <input className={inputCls} value={ageRange} onChange={(e) => setAgeRange(e.target.value)} />
-              </Field>
-              <Field label="الجنس">
-                <select className={inputCls} value={gender} onChange={(e) => setGender(e.target.value)}>
-                  <option value="">غير محدد</option>
-                  <option value="boys">أولاد</option>
-                  <option value="girls">بنات</option>
-                  <option value="unisex">للجنسين</option>
-                </select>
-              </Field>
               <Field label="رمز المنتج (SKU)">
                 <input className={inputCls} dir="ltr" value={sku} onChange={(e) => setSku(e.target.value)} />
               </Field>
@@ -389,72 +469,136 @@ export default function ProductForm() {
             <p className="mt-2 text-xs text-slate-500">الصورة الأولى هي الرئيسية. الحد الأقصى 5 ميغابايت للصورة.</p>
           </Card>
 
-          <Card title="المتغيّرات (المقاس / اللون / المخزون)">
-            {variants.length === 0 ? (
-              <p className="mb-3 text-sm text-slate-500">
-                لا توجد متغيّرات. أضف متغيّراً لتتبّع المخزون حسب المقاس واللون.
-              </p>
-            ) : (
-              <div className="mb-3 space-y-3">
-                {variants.map((v) => (
-                  <div
-                    key={v.key}
-                    className="grid grid-cols-2 items-end gap-3 rounded-lg border border-slate-200 p-3 sm:grid-cols-6"
-                  >
-                    <Field label="المقاس">
-                      <input className={inputCls} value={v.size} onChange={(e) => updateVariant(v.key, { size: e.target.value })} />
-                    </Field>
-                    <Field label="اللون">
-                      <input className={inputCls} value={v.color} onChange={(e) => updateVariant(v.key, { color: e.target.value })} />
-                    </Field>
-                    <Field label="سعر خاص" hint="اختياري">
-                      <input
-                        type="number"
-                        min="0"
-                        className={inputCls}
-                        value={v.price}
-                        onChange={(e) => updateVariant(v.key, { price: e.target.value })}
-                      />
-                    </Field>
-                    <Field label="المخزون">
-                      <input
-                        type="number"
-                        min="0"
-                        step="1"
-                        className={inputCls}
-                        value={v.stock_quantity}
-                        onChange={(e) => updateVariant(v.key, { stock_quantity: e.target.value })}
-                      />
-                    </Field>
-                    <Field label="SKU">
-                      <input
-                        className={inputCls}
-                        dir="ltr"
-                        value={v.sku}
-                        onChange={(e) => updateVariant(v.key, { sku: e.target.value })}
-                      />
-                    </Field>
-                    <div className="flex items-center justify-between gap-2 pb-1">
-                      <Toggle
-                        checked={v.is_active}
-                        onChange={(val) => updateVariant(v.key, { is_active: val })}
-                        label="متاح"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setVariants((prev) => prev.filter((x) => x.key !== v.key))}
-                        className="text-sm font-semibold text-rose-600 hover:underline"
-                      >
-                        حذف
-                      </button>
-                    </div>
+          <Card title="صور صفحة الهبوط">
+            <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
+              <span className="font-semibold">مكان العرض:</span>
+              {([
+                ['above', 'فوق وصف المنتج'],
+                ['below', 'تحت وصف المنتج'],
+              ] as const).map(([val, label]) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => setLandingPosition(val)}
+                  className={`rounded-full border px-3 py-1 font-semibold transition ${
+                    landingPosition === val
+                      ? 'border-brand-600 bg-brand-600 text-white'
+                      : 'border-slate-300 text-slate-600 hover:border-brand-500'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {landingImages.map((url, i) => (
+                <div key={url} className="group relative overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                  <img src={url} alt="" className="aspect-[3/4] w-full object-contain" />
+                  <span className="absolute right-1 top-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                    {i + 1}
+                  </span>
+                  <div className="absolute inset-x-0 bottom-0 flex gap-1 bg-black/60 p-1 opacity-0 transition group-hover:opacity-100">
+                    <button type="button" onClick={() => moveLanding(i, -1)} className="flex-1 rounded bg-white/90 py-1 text-[11px] font-semibold">
+                      →
+                    </button>
+                    <button type="button" onClick={() => moveLanding(i, 1)} className="flex-1 rounded bg-white/90 py-1 text-[11px] font-semibold">
+                      ←
+                    </button>
+                    <button type="button" onClick={() => removeLanding(i)} className="flex-1 rounded bg-rose-600 py-1 text-[11px] font-semibold text-white">
+                      حذف
+                    </button>
                   </div>
-                ))}
+                </div>
+              ))}
+              <label className="flex aspect-[3/4] cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-slate-300 text-sm text-slate-500 hover:border-brand-500 hover:text-brand-600">
+                <span className="text-2xl">{uploadingLanding ? '…' : '＋'}</span>
+                <span>{uploadingLanding ? 'جارٍ الرفع' : 'إضافة صور'}</span>
+                <input
+                  type="file"
+                  accept="image/*,.gif"
+                  multiple
+                  className="hidden"
+                  disabled={uploadingLanding}
+                  onChange={(e) => {
+                    uploadLanding(e.target.files)
+                    e.target.value = ''
+                  }}
+                />
+              </label>
+            </div>
+            <p className="mt-2 text-xs text-slate-500">
+              تقبل JPG وPNG وWebP وGIF المتحرّكة. تُعرض بالترتيب الظاهر. الحد الأقصى 5 ميغابايت للصورة.
+            </p>
+          </Card>
+
+          <Card title="الألوان والمقاسات">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <ChipsInput
+                label="الألوان"
+                hint="اكتب لوناً واضغط Enter (أو افصل بفاصلة)"
+                items={colors}
+                onChange={setColors}
+                placeholder="أحمر، أزرق…"
+              />
+              <ChipsInput
+                label="المقاسات"
+                hint="اكتب مقاساً واضغط Enter (أو افصل بفاصلة)"
+                items={sizes}
+                onChange={setSizes}
+                placeholder="S، M، 2-3 سنوات…"
+              />
+            </div>
+
+            {comboList.length > 0 && (
+              <div className="mt-5">
+                <p className="mb-2 text-sm font-semibold">المخزون لكل تركيبة ({comboList.length})</p>
+                <div className="space-y-2">
+                  {comboList.map((c) => {
+                    const v = getCombo(c.key)
+                    return (
+                      <div
+                        key={c.key}
+                        className="grid grid-cols-2 items-end gap-3 rounded-lg border border-slate-200 p-3 sm:grid-cols-5"
+                      >
+                        <div className="col-span-2 text-sm font-semibold sm:col-span-1">
+                          {[c.color, c.size].filter(Boolean).join(' / ')}
+                        </div>
+                        <Field label="المخزون">
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            className={inputCls}
+                            value={v.stock_quantity}
+                            onChange={(e) => updateCombo(c.key, { stock_quantity: e.target.value })}
+                          />
+                        </Field>
+                        <Field label="سعر خاص" hint="اختياري">
+                          <input
+                            type="number"
+                            min="0"
+                            className={inputCls}
+                            value={v.price}
+                            onChange={(e) => updateCombo(c.key, { price: e.target.value })}
+                          />
+                        </Field>
+                        <Field label="SKU">
+                          <input
+                            className={inputCls}
+                            dir="ltr"
+                            value={v.sku}
+                            onChange={(e) => updateCombo(c.key, { sku: e.target.value })}
+                          />
+                        </Field>
+                        <div className="pb-1">
+                          <Toggle checked={v.is_active} onChange={(val) => updateCombo(c.key, { is_active: val })} label="متاح" />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             )}
-            <Button type="button" variant="secondary" onClick={() => setVariants((prev) => [...prev, newVariant()])}>
-              + إضافة متغيّر
-            </Button>
           </Card>
         </div>
 
