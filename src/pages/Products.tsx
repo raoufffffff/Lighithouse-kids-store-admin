@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useToast } from '../components/Toast'
 import { Button, Card, PageHeader, PageLoader, Toggle, inputCls } from '../components/ui'
 import { dzd } from '../lib/format'
+import { refreshStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
 
 type Row = {
@@ -57,7 +58,9 @@ export default function Products() {
     if (error) {
       notify('فشل التحديث: ' + error.message, 'error')
       load()
+      return
     }
+    void refreshStore()
   }
 
   const remove = async (row: Row) => {
@@ -68,6 +71,7 @@ export default function Products() {
       return
     }
     notify('تم حذف المنتج')
+    void refreshStore()
     setRows((prev) => prev?.filter((r) => r.id !== row.id) ?? prev)
   }
 

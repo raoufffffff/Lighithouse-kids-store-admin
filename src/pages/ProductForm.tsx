@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useToast } from '../components/Toast'
 import { Button, Card, Field, PageHeader, PageLoader, Toggle, inputCls } from '../components/ui'
+import { refreshStore } from '../lib/store'
 import { randomSuffix, slugify, toNumberOrNull } from '../lib/format'
 import { PRODUCTS_BUCKET, supabase } from '../lib/supabase'
 import type { Category } from '../lib/types'
@@ -360,6 +361,7 @@ export default function ProductForm() {
       if (error) return fail(error.message)
     }
 
+    void refreshStore()
     setSaving(false)
     notify(isEdit ? 'تم حفظ التعديلات' : 'تمت إضافة المنتج')
     navigate('/products')

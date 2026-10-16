@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useToast } from '../components/Toast'
 import { Button, Card, PageHeader, PageLoader, Toggle, inputCls } from '../components/ui'
+import { refreshStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
 import type { DeliveryRate } from '../lib/types'
 
@@ -86,6 +87,7 @@ export default function Delivery() {
       return
     }
     notify(`تم حفظ ${payload.length} ولاية`)
+    void refreshStore()
     await load()
   }
 

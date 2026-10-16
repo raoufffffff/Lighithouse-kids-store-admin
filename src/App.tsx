@@ -10,6 +10,7 @@ import Orders from './pages/Orders'
 import Pixels from './pages/Pixels'
 import ProductForm from './pages/ProductForm'
 import Products from './pages/Products'
+import StoreSettings from './pages/StoreSettings'
 
 export default function App() {
   const { session, isAdmin, loading } = useAuth()
@@ -48,6 +49,7 @@ export default function App() {
         <Route path="products/:id" element={<ProductForm />} />
         <Route path="delivery" element={<Delivery />} />
         <Route path="pixels" element={<Pixels />} />
+        <Route path="settings" element={<StoreSettings />} />
         <Route path="*" element={<Navigate to="/orders" replace />} />
       </Route>
     </Routes>

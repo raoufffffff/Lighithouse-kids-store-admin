@@ -8,6 +8,7 @@ const links = [
   { to: '/products/new', label: 'إضافة منتج', icon: '➕' },
   { to: '/delivery', label: 'أسعار التوصيل', icon: '🚚' },
   { to: '/pixels', label: 'البيكسل', icon: '📈' },
+  { to: '/settings', label: 'إعدادات المتجر', icon: '⚙️' },
 ]
 
 export default function Layout() {

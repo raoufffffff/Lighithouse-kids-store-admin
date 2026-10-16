@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useToast } from '../components/Toast'
 import { Button, Card, Field, PageHeader, PageLoader, Toggle, inputCls } from '../components/ui'
+import { refreshStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
 
 type PixelValue = { pixel_id: string; enabled: boolean }
@@ -60,6 +61,7 @@ export default function Pixels() {
     setFb({ ...fb, pixel_id: fbId })
     setTt({ ...tt, pixel_id: ttId })
     notify('تم حفظ إعدادات البيكسل')
+    void refreshStore()
   }
 
   if (loading) return <PageLoader />
