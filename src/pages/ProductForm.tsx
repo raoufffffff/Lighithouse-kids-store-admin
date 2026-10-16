@@ -3,7 +3,7 @@ import type { FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useToast } from '../components/Toast'
 import { Button, Card, Field, PageHeader, PageLoader, Toggle, inputCls } from '../components/ui'
-import { refreshStore } from '../lib/store'
+import { assetUrl, refreshStore } from '../lib/store'
 import { randomSuffix, slugify, toNumberOrNull } from '../lib/format'
 import { PRODUCTS_BUCKET, supabase } from '../lib/supabase'
 import type { Category } from '../lib/types'
@@ -426,7 +426,7 @@ export default function ProductForm() {
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {images.map((url, i) => (
                 <div key={url} className="group relative overflow-hidden rounded-lg border border-slate-200">
-                  <img src={url} alt="" className="aspect-square w-full object-cover" />
+                  <img src={assetUrl(url)} alt="" className="aspect-square w-full object-cover" />
                   {i === 0 && (
                     <span className="absolute right-1 top-1 rounded bg-sun-400 px-1.5 py-0.5 text-[10px] font-bold text-brand-900">
                       رئيسية
@@ -495,7 +495,7 @@ export default function ProductForm() {
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {landingImages.map((url, i) => (
                 <div key={url} className="group relative overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
-                  <img src={url} alt="" className="aspect-[3/4] w-full object-contain" />
+                  <img src={assetUrl(url)} alt="" className="aspect-[3/4] w-full object-contain" />
                   <span className="absolute right-1 top-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-bold text-white">
                     {i + 1}
                   </span>

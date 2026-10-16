@@ -22,3 +22,6 @@ export async function refreshStore(): Promise<boolean> {
     return false
   }
 }
+
+/** Images hosted by the storefront itself are stored as "/products/x.jpg"; show them via the store's URL. */
+export const assetUrl = (u: string) => (u.startsWith('/') && STORE_URL ? STORE_URL + u : u)

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useToast } from '../components/Toast'
 import { Button, Card, PageHeader, PageLoader, Toggle, inputCls } from '../components/ui'
 import { dzd } from '../lib/format'
-import { refreshStore } from '../lib/store'
+import { assetUrl, refreshStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
 
 type Row = {
@@ -132,7 +132,7 @@ export default function Products() {
                         <Link to={`/products/${r.id}`} className="flex items-center gap-3">
                           {r.images[0] ? (
                             <img
-                              src={r.images[0]}
+                              src={assetUrl(r.images[0])}
                               alt=""
                               className="h-12 w-12 rounded-lg object-cover"
                             />
