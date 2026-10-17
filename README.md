@@ -36,6 +36,12 @@ select id, 'Admin' from auth.users where email = 'you@example.com';
 - يتطلب هجرة `supabase/migrations/*_lh_product_pages_draft_publish_versions.sql`.
 - ملف `src/lib/page-content.ts` نسخة مطابقة لما في المتجر؛ عدّل الاثنين معاً.
 
+## التوليد بالذكاء الاصطناعي (Gemini)
+- الدالة `supabase/functions/lh-generate-page` (تُنشر في Supabase، `verify_jwt` مفعّل وتتحقق أنها أدمين).
+- السر `GEMINI_API_KEY` في Edge Function Secrets، ويمكن تغيير النموذج بسر اختياري `GEMINI_MODEL`.
+- النتيجة بيانات فقط، تُنظَّف في المتصفح وتظهر في المعاينة، ولا تُحفظ ولا تُنشر تلقائياً.
+- حد 20 توليداً بالساعة (يتطلب هجرة `*_lh_ai_generations.sql`).
+
 ## النشر
 ملفا `vercel.json` و `public/_redirects` يتكفّلان بإعادة توجيه المسارات (SPA).
 أضف `VITE_SUPABASE_URL` و `VITE_SUPABASE_ANON_KEY` كمتغيرات بيئة في منصة النشر.

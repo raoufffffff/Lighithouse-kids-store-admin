@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import AiGenerateCard from '../components/AiGenerateCard'
 import PreviewFrame from '../components/PreviewFrame'
 import SectionEditor from '../components/SectionEditor'
 import { useToast } from '../components/Toast'
@@ -70,6 +71,8 @@ export default function ProductPage() {
   const [busy, setBusy] = useState<'save' | 'publish' | 'unpublish' | null>(null)
   const [showVersions, setShowVersions] = useState(false)
   const [tab, setTab] = useState<'edit' | 'preview'>('edit')
+  const [assumptions, setAssumptions] = useState<string[]>([])
+  const [beforeAi, setBeforeAi] = useState<{ content: PageContent | null } | null>(null)
 
   const loadVersions = useCallback(async () => {
     if (!id) return
@@ -355,6 +358,27 @@ export default function ProductPage() {
       }),
     )
 
+  const applyAi = (raw: PageContent, notes: string[]) => {
+    const clean = normalizePageContent(raw)
+    const next = clean ? loadForEditing(clean) : null
+    if (!next) {
+      notify('لم يُنتج الذكاء الاصطناعي أقساماً صالحة. أعد المحاولة.', 'error')
+      return
+    }
+    const imgs = product.landing_images ?? []
+    if (imgs.length) {
+      const sec = newSection('images')
+      if (sec.type === 'images') sec.images = imgs
+      next.sections.splice(Math.min(1, next.sections.length), 0, sec)
+    }
+    setBeforeAi({ content })
+    setContent(next)
+    setAssumptions(notes)
+    setOpen(new Set())
+    setTab('preview')
+    notify('جاهزة في المعاينة. راجعها ثم احفظ أو انشر.')
+  }
+
   return (
     <>
       <PageHeader
@@ -452,7 +476,38 @@ export default function ProductPage() {
                 </Button>
               </div>
             </Card>
-          ) : (
+          ) : null}
+
+          <AiGenerateCard productId={product.id} hasContent={!!content} onResult={applyAi} />
+
+          {beforeAi && (
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-900">
+              <span>هذه مسودة مولَّدة لم تُحفظ بعد.</span>
+              <button
+                type="button"
+                className="underline"
+                onClick={() => {
+                  setContent(beforeAi.content)
+                  setBeforeAi(null)
+                  setAssumptions([])
+                }}
+              >
+                تراجع عن التوليد
+              </button>
+            </div>
+          )}
+
+          {assumptions.length > 0 && (
+            <Card title="⚠️ تحقّق من هذه النقاط قبل النشر">
+              <ul className="list-disc space-y-1 pr-5 text-xs text-slate-700">
+                {assumptions.map((a, i) => (
+                  <li key={i}>{a}</li>
+                ))}
+              </ul>
+            </Card>
+          )}
+
+          {content && (
             <>
               <Card title="لون الصفحة">
                 <div className="flex flex-wrap gap-3">
