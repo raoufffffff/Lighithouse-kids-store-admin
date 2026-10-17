@@ -11,9 +11,12 @@ const WIDTH: Record<Device, number> = { phone: 390, desktop: 1180 }
 export default function PreviewFrame({
   storeUrl,
   payload,
+  onPreviewError,
 }: {
   storeUrl: string
   payload: Record<string, unknown>
+  /** Called when the store could not run an AI-designed page (runtime error in the generated code). */
+  onPreviewError?: (message: string) => void
 }) {
   const frameRef = useRef<HTMLIFrameElement>(null)
   const boxRef = useRef<HTMLDivElement>(null)
@@ -43,11 +46,13 @@ export default function PreviewFrame({
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
       if (e.origin !== origin || e.source !== frameRef.current?.contentWindow) return
-      if ((e.data as { type?: string } | null)?.type === 'lh-preview:ready') send()
+      const d = e.data as { type?: string; message?: unknown } | null
+      if (d?.type === 'lh-preview:ready') send()
+      if (d?.type === 'lh-preview:error') onPreviewError?.(String(d.message ?? '').slice(0, 300))
     }
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
-  }, [origin, send])
+  }, [origin, send, onPreviewError])
 
   useEffect(() => {
     const el = boxRef.current

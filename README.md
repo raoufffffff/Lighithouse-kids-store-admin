@@ -42,6 +42,11 @@ select id, 'Admin' from auth.users where email = 'you@example.com';
 - النتيجة بيانات فقط، تُنظَّف في المتصفح وتظهر في المعاينة، ولا تُحفظ ولا تُنشر تلقائياً.
 - حد 20 توليداً بالساعة (يتطلب هجرة `*_lh_ai_generations.sql`).
 
+## تصميم AI حر (صفحة `/products/:id/design`)
+- دالة `lh-design-page` (Gemini) تكتب مكوّن React/Tailwind كاملاً حول واجهة `checkout.*` المقفلة، وتتحقق أن الفورم والسعر النهائي وشاشة النجاح موجودة وتعيد المحاولة مرة عند الخلل.
+- يُصرَّف الكود في الأدمين (sucrase)، ويُخزَّن `{ v: 2, tsx, js }` في `page_draft` / `page_content`، ويشغّله المتجر. إن فشل التشغيل يظهر القالب القديم للزائر.
+- أوضاع الدالة: `suggest` (اقتراح توجيه من صورة المنتج) و`generate` و`edit` (تعديل بالمحادثة).
+
 ## النشر
 ملفا `vercel.json` و `public/_redirects` يتكفّلان بإعادة توجيه المسارات (SPA).
 أضف `VITE_SUPABASE_URL` و `VITE_SUPABASE_ANON_KEY` كمتغيرات بيئة في منصة النشر.

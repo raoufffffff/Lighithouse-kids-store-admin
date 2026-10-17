@@ -466,6 +466,14 @@ export default function ProductPage() {
         <div className={`${tab === 'edit' ? '' : 'hidden'} space-y-4 lg:block`}>
           {!content ? (
             <Card title="ابدأ تصميم الصفحة">
+              {[product.page_draft, product.page_content].some((x) => (x as { v?: number } | null)?.v === 2) && (
+                <p className="mb-4 rounded-lg bg-amber-50 p-3 text-xs font-bold text-amber-900">
+                  لهذا المنتج تصميم بالذكاء الاصطناعي. حفظ مسودة هنا سيستبدل مسودة التصميم، ونشرها سيستبدل المنشور.
+                  <Link to={`/products/${product.id}/design`} className="mr-1 underline">
+                    افتح التصميم
+                  </Link>
+                </p>
+              )}
               <p className="mb-4 text-sm text-slate-600">
                 الصفحة الحالية تستخدم القالب القديم. ابدأ بمسودة جديدة، ولن يتغيّر شيء عند الزوار حتى تضغط «نشر».
               </p>

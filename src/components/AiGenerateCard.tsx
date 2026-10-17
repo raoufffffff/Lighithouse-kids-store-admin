@@ -10,7 +10,7 @@ export const TONES = [
   { id: 'direct', label: '🎯 مباشرة للبيع' },
 ] as const
 
-const ERRORS: Record<string, string> = {
+export const ERRORS: Record<string, string> = {
   forbidden: 'هذا الحساب ليس أدمين.',
   rate_limited: 'بلغتَ الحد الأقصى (20 توليداً في الساعة). حاول لاحقاً.',
   ai_busy: 'خدمة Gemini مشغولة الآن. أعد المحاولة بعد لحظات.',
@@ -18,6 +18,8 @@ const ERRORS: Record<string, string> = {
   ai_bad_output: 'لم يُرجع الذكاء الاصطناعي نتيجة صالحة. أعد المحاولة.',
   ai_failed: 'فشل الاتصال بـ Gemini. تحقق من المفتاح GEMINI_API_KEY ثم أعد المحاولة.',
   ai_not_configured: 'مفتاح GEMINI_API_KEY غير مضبوط في Supabase.',
+  ai_invalid_code: 'لم ينتج الذكاء الاصطناعي كوداً صالحاً بعد محاولتين. أعد المحاولة أو بسّط الطلب.',
+  bad_request: 'طلب غير صالح.',
   product_not_found: 'المنتج غير موجود.',
 }
 
