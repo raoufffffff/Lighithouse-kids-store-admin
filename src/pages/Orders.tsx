@@ -48,6 +48,7 @@ export default function Orders() {
       return (
         o.customer_name.toLowerCase().includes(q) ||
         o.customer_phone.includes(q) ||
+        (o.commune ?? '').toLowerCase().includes(q) ||
         String(o.order_number).includes(q)
       )
     })
@@ -85,7 +86,7 @@ export default function Orders() {
         </div>
         <input
           className={`${inputCls} mb-4 max-w-xs`}
-          placeholder="بحث بالاسم أو الهاتف أو رقم الطلب…"
+          placeholder="بحث بالاسم أو الهاتف أو البلدية أو رقم الطلب…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -101,7 +102,7 @@ export default function Orders() {
                 <tr className="border-b border-slate-200 text-right text-xs text-slate-500">
                   <th className="p-2 font-semibold">#</th>
                   <th className="p-2 font-semibold">العميل</th>
-                  <th className="p-2 font-semibold">الولاية</th>
+                  <th className="p-2 font-semibold">الولاية / البلدية</th>
                   <th className="p-2 font-semibold">الإجمالي</th>
                   <th className="p-2 font-semibold">الحالة</th>
                   <th className="p-2 font-semibold">التاريخ</th>
@@ -122,7 +123,10 @@ export default function Orders() {
                       </div>
                     </td>
                     <td className="p-2 text-slate-600">
-                      {o.wilaya_code ? wilayas[o.wilaya_code] ?? o.wilaya_code : '—'}
+                      <div className="font-semibold text-slate-700">
+                        {o.wilaya_code ? wilayas[o.wilaya_code] ?? o.wilaya_code : '—'}
+                      </div>
+                      <div className="text-xs text-slate-600">{o.commune || '—'}</div>
                       <div className="text-xs text-slate-400">
                         {o.delivery_type === 'home' ? 'للمنزل' : 'للمكتب'}
                       </div>

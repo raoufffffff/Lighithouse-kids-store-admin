@@ -1,6 +1,7 @@
 export type OrderStatus =
   | 'pending'
   | 'confirmed'
+  | 'unreachable'
   | 'shipped'
   | 'delivered'
   | 'cancelled'
@@ -9,6 +10,7 @@ export type OrderStatus =
 export const ORDER_STATUSES: { value: OrderStatus; label: string; badge: string }[] = [
   { value: 'pending', label: 'قيد الانتظار', badge: 'bg-amber-100 text-amber-800' },
   { value: 'confirmed', label: 'مؤكد', badge: 'bg-sky-100 text-sky-800' },
+  { value: 'unreachable', label: 'فشل الاتصال', badge: 'bg-orange-100 text-orange-800' },
   { value: 'shipped', label: 'تم الشحن', badge: 'bg-indigo-100 text-indigo-800' },
   { value: 'delivered', label: 'تم التسليم', badge: 'bg-emerald-100 text-emerald-800' },
   { value: 'cancelled', label: 'ملغى', badge: 'bg-rose-100 text-rose-800' },
