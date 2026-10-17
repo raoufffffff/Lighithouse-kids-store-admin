@@ -167,6 +167,11 @@ export default function Products() {
                       </td>
                       <td className="p-2">
                         <div className="flex justify-end gap-1">
+                          <Link to={`/products/${r.id}/page`}>
+                            <Button variant="secondary" className="!px-3 !py-1.5">
+                              🎨 الصفحة
+                            </Button>
+                          </Link>
                           <Link to={`/products/${r.id}`}>
                             <Button variant="secondary" className="!px-3 !py-1.5">
                               تعديل

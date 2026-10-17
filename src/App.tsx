@@ -9,6 +9,7 @@ import OrderDetail from './pages/OrderDetail'
 import Orders from './pages/Orders'
 import Pixels from './pages/Pixels'
 import ProductForm from './pages/ProductForm'
+import ProductPage from './pages/ProductPage'
 import Products from './pages/Products'
 import StoreSettings from './pages/StoreSettings'
 
@@ -47,6 +48,7 @@ export default function App() {
         <Route path="products" element={<Products />} />
         <Route path="products/new" element={<ProductForm />} />
         <Route path="products/:id" element={<ProductForm />} />
+        <Route path="products/:id/page" element={<ProductPage />} />
         <Route path="delivery" element={<Delivery />} />
         <Route path="pixels" element={<Pixels />} />
         <Route path="settings" element={<StoreSettings />} />
