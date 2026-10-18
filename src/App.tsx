@@ -9,6 +9,8 @@ import OrderDetail from './pages/OrderDetail'
 import Orders from './pages/Orders'
 import Pixels from './pages/Pixels'
 import { AbDetail, AbList } from './pages/AbTests'
+import Abandoned from './pages/Abandoned'
+import Profit from './pages/Profit'
 import ProductDesign from './pages/ProductDesign'
 import ProductForm from './pages/ProductForm'
 import ProductPage from './pages/ProductPage'
@@ -52,6 +54,8 @@ export default function App() {
         <Route path="products/:id" element={<ProductForm />} />
         <Route path="products/:id/page" element={<ProductPage />} />
         <Route path="products/:id/design" element={<ProductDesign />} />
+        <Route path="abandoned" element={<Abandoned />} />
+        <Route path="profit" element={<Profit />} />
         <Route path="ab" element={<AbList />} />
         <Route path="ab/:id" element={<AbDetail />} />
         <Route path="delivery" element={<Delivery />} />

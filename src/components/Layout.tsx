@@ -4,6 +4,8 @@ import { useAuth } from '../auth/AuthContext'
 
 const links = [
   { to: '/orders', label: 'الطلبات', icon: '📦' },
+  { to: '/abandoned', label: 'الطلبات المتروكة', icon: '🛒' },
+  { to: '/profit', label: 'الربح', icon: '💰' },
   { to: '/products', label: 'المنتجات', icon: '🧸' },
   { to: '/products/new', label: 'إضافة منتج', icon: '➕' },
   { to: '/ab', label: 'اختبارات A/B', icon: '🧪' },

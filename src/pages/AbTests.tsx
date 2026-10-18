@@ -7,7 +7,7 @@ import { supabase } from '../lib/supabase'
 
 type TestRow = { id: string; product_id: string; slug: string; name: string; is_active: boolean; product: { name: string } | null }
 type VariantRow = { id: string; label: string; is_active: boolean; position: number }
-type Stat = { variant_id: string; views: number; orders: number; revenue: number }
+type Stat = { variant_id: string; views: number; orders: number; revenue: number; profit?: number; bad?: number }
 
 const link = (slug: string) => `${STORE_URL}/ab/${slug}`
 
@@ -112,10 +112,11 @@ export function AbDetail() {
 
   const load = useCallback(async () => {
     if (!id) return
-    const [t, v, s] = await Promise.all([
+    const [t, v, s, pr] = await Promise.all([
       supabase.from('lh_ab_tests').select('id,product_id,slug,name,is_active,product:lh_products(name)').eq('id', id).maybeSingle(),
       supabase.from('lh_ab_variants').select('id,label,is_active,position').eq('test_id', id).order('position').order('created_at'),
       supabase.rpc('lh_ab_stats', { p_test_id: id }),
+      supabase.rpc('lh_ab_profit', { p_test_id: id }),
     ])
     if (!t.data) {
       notify('الاختبار غير موجود', 'error')
@@ -125,6 +126,9 @@ export function AbDetail() {
     setVariants((v.data ?? []) as VariantRow[])
     const map: Record<string, Stat> = {}
     for (const r of (s.data ?? []) as Stat[]) map[r.variant_id] = { ...r, views: Number(r.views), orders: Number(r.orders), revenue: Number(r.revenue) }
+    for (const r of (pr.data ?? []) as { variant_id: string; profit: number; returned: number }[]) {
+      if (map[r.variant_id]) map[r.variant_id] = { ...map[r.variant_id], profit: Number(r.profit), bad: Number(r.returned) }
+    }
     setStats(map)
   }, [id, navigate, notify])
   useEffect(() => void load(), [load])
@@ -198,11 +202,12 @@ export function AbDetail() {
                     <button className="text-xs font-bold text-rose-600" onClick={() => del(v.id)}>حذف</button>
                   </div>
                 </div>
-                <div className="mt-2 grid grid-cols-4 gap-2 text-center text-sm">
+                <div className="mt-2 grid grid-cols-5 gap-2 text-center text-sm">
                   <div><div className="text-xs text-slate-500">زيارات</div><b>{s.views}</b></div>
                   <div><div className="text-xs text-slate-500">طلبات</div><b>{s.orders}</b></div>
                   <div><div className="text-xs text-slate-500">التحويل</div><b>{cr.toFixed(1)}%</b></div>
                   <div><div className="text-xs text-slate-500">الإيراد</div><b>{s.revenue.toLocaleString('en')}</b></div>
+                  <div><div className="text-xs text-slate-500">الربح</div><b className={(s.profit ?? 0) < 0 ? 'text-rose-600' : ''}>{(s.profit ?? 0).toLocaleString('en')}</b></div>
                 </div>
                 {conf != null && s.views >= 30 && (
                   <p className="mt-2 text-xs text-slate-500">الفرق عن الأفضل: ثقة إحصائية {(conf * 100).toFixed(0)}%{conf < 0.95 ? ' (غير حاسمة بعد)' : ''}</p>
