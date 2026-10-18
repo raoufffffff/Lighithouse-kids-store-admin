@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { transform } from 'sucrase'
 import { ERRORS, TONES } from '../components/AiGenerateCard'
 import PreviewFrame from '../components/PreviewFrame'
@@ -66,6 +66,7 @@ async function callDesign(body: Record<string, unknown>): Promise<{ data?: Recor
 
 export default function ProductDesign() {
   const { id } = useParams()
+  const variantId = useSearchParams()[0].get('variant')
   const navigate = useNavigate()
   const notify = useToast()
 
@@ -89,6 +90,10 @@ export default function ProductDesign() {
   const [showCode, setShowCode] = useState(false)
   const [showVersions, setShowVersions] = useState(false)
   const [tab, setTab] = useState<'edit' | 'preview'>('edit')
+  const [abTests, setAbTests] = useState<{ id: string; name: string }[]>([])
+  const [abTest, setAbTest] = useState('')
+  const [abLabel, setAbLabel] = useState('')
+  const [variantLabel, setVariantLabel] = useState('')
 
   const loadVersions = useCallback(async () => {
     if (!id) return
@@ -132,13 +137,24 @@ export default function ProductDesign() {
       setTsx(draft?.tsx ?? pub?.tsx ?? '')
       if (!draft && row.page_draft != null) setOtherKind('draft')
       else if (!pub && row.page_content != null) setOtherKind('published')
+      const at = await supabase.from('lh_ab_tests').select('id,name').eq('product_id', id).order('created_at', { ascending: false })
+      if (!cancelled) setAbTests((at.data ?? []) as { id: string; name: string }[])
+      if (variantId) {
+        const vr = await supabase.from('lh_ab_variants').select('label,content').eq('id', variantId).maybeSingle()
+        const vc = vr.data ? asCode(vr.data.content) : null
+        if (!cancelled && vc) {
+          setTsx(vc.tsx)
+          setSavedTsx(vc.tsx)
+          setVariantLabel(vr.data!.label as string)
+        }
+      }
       setLoading(false)
       void loadVersions()
     })()
     return () => {
       cancelled = true
     }
-  }, [id, navigate, notify, loadVersions])
+  }, [id, variantId, navigate, notify, loadVersions])
 
   /* live compile (debounced) */
   const [compiled, setCompiled] = useState<{ js: string; error: string }>({ js: '', error: '' })
@@ -251,7 +267,7 @@ export default function ProductDesign() {
   /* ---------- persistence ---------- */
 
   const saveDraft = async (quiet = false): Promise<boolean> => {
-    if (!id || !ready) return false
+    if (!id || !ready || variantId) return false
     if (otherKind === 'draft' && !confirm('توجد مسودة بأسلوب الأقسام لهذا المنتج وسيستبدلها هذا التصميم. المتابعة؟')) return false
     const content: PageCode = { v: 2, tsx, js: compiled.js }
     const { error } = await supabase.from('lh_products').update({ page_draft: content }).eq('id', id)
@@ -265,6 +281,36 @@ export default function ProductDesign() {
     return true
   }
 
+  const saveAsVariant = async () => {
+    if (!ready) return
+    if (!abTest || !abLabel.trim()) return notify('اختر الاختبار واكتب اسماً للنسخة', 'error')
+    setBusy('save')
+    const content: PageCode = { v: 2, tsx, js: compiled.js }
+    const { count } = await supabase.from('lh_ab_variants').select('id', { count: 'exact', head: true }).eq('test_id', abTest)
+    const { error } = await supabase.from('lh_ab_variants').insert({ test_id: abTest, label: abLabel.trim(), content, position: count ?? 0 })
+    if (error) notify('فشل الحفظ: ' + error.message, 'error')
+    else {
+      await refreshStore()
+      setAbLabel('')
+      notify('أُضيفت النسخة إلى الاختبار ✓')
+    }
+    setBusy(null)
+  }
+
+  const saveVariant = async () => {
+    if (!variantId || !ready) return
+    setBusy('save')
+    const content: PageCode = { v: 2, tsx, js: compiled.js }
+    const { error } = await supabase.from('lh_ab_variants').update({ content }).eq('id', variantId)
+    if (error) notify('فشل الحفظ: ' + error.message, 'error')
+    else {
+      setSavedTsx(tsx)
+      await refreshStore()
+      notify('تم حفظ النسخة وتحديث المتجر ✓')
+    }
+    setBusy(null)
+  }
+
   const onSave = async () => {
     setBusy('save')
     await saveDraft()
@@ -272,7 +318,7 @@ export default function ProductDesign() {
   }
 
   const onPublish = async () => {
-    if (!id || !ready) return
+    if (!id || !ready || variantId) return
     if (!confirm('نشر الصفحة الآن؟ ستظهر للزوار فوراً.')) return
     setBusy('publish')
     if (!(await saveDraft(true))) return setBusy(null)
@@ -438,6 +484,35 @@ export default function ProductDesign() {
                 </Button>
               </div>
             </Card>
+          )}
+
+          {variantId ? (
+            <Card title={`🧪 تعديل نسخة اختبار: ${variantLabel}`}>
+              <p className="mb-3 text-xs text-slate-500">أنت تعدّل نسخة من اختبار A/B، وليس صفحة المنتج. الحفظ هنا لا يمسّ الصفحة المنشورة.</p>
+              <div className="flex gap-2">
+                <Button onClick={saveVariant} loading={busy === 'save'} disabled={!ready || busy !== null}>حفظ في النسخة</Button>
+                <Link to={`/ab`} className="self-center text-sm font-bold text-brand-600">← الاختبارات</Link>
+              </div>
+            </Card>
+          ) : (
+            tsx.trim() && (
+              <Card title="🧪 احفظ كنسخة اختبار A/B">
+                {abTests.length === 0 ? (
+                  <p className="text-xs text-slate-500">أنشئ أولاً اختباراً لهذا المنتج من <Link className="font-bold text-brand-600" to="/ab">صفحة الاختبارات</Link>.</p>
+                ) : (
+                  <div className="space-y-2">
+                    <select className={inputCls} value={abTest} onChange={(e) => setAbTest(e.target.value)}>
+                      <option value="">— اختر الاختبار —</option>
+                      {abTests.map((a) => (
+                        <option key={a.id} value={a.id}>{a.name}</option>
+                      ))}
+                    </select>
+                    <input className={inputCls} maxLength={60} placeholder="اسم النسخة (مثل: تصميم أخضر)" value={abLabel} onChange={(e) => setAbLabel(e.target.value)} />
+                    <Button variant="secondary" onClick={saveAsVariant} disabled={!ready || busy !== null}>أضف كنسخة جديدة</Button>
+                  </div>
+                )}
+              </Card>
+            )
           )}
 
           {problem && (

@@ -6,6 +6,7 @@ const links = [
   { to: '/orders', label: 'الطلبات', icon: '📦' },
   { to: '/products', label: 'المنتجات', icon: '🧸' },
   { to: '/products/new', label: 'إضافة منتج', icon: '➕' },
+  { to: '/ab', label: 'اختبارات A/B', icon: '🧪' },
   { to: '/delivery', label: 'أسعار التوصيل', icon: '🚚' },
   { to: '/pixels', label: 'البيكسل', icon: '📈' },
   { to: '/settings', label: 'إعدادات المتجر', icon: '⚙️' },
