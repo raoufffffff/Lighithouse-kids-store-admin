@@ -1,30 +1,42 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useToast } from '../components/Toast'
 import { Card, PageHeader, PageLoader, inputCls } from '../components/ui'
 import { dzd, formatDate } from '../lib/format'
+import { assetUrl } from '../lib/store'
 import { supabase } from '../lib/supabase'
 import { ORDER_STATUSES, statusMeta } from '../lib/types'
 import type { Order, OrderStatus } from '../lib/types'
 
+type ListItem = { product_id: string | null; product_name: string; variant_label: string | null; quantity: number }
+type OrderRow = Order & { lh_order_items: ListItem[] }
+
 export default function Orders() {
   const notify = useToast()
-  const [orders, setOrders] = useState<Order[] | null>(null)
+  const navigate = useNavigate()
+  const [orders, setOrders] = useState<OrderRow[] | null>(null)
+  const [images, setImages] = useState<Record<string, string>>({})
   const [wilayas, setWilayas] = useState<Record<number, string>>({})
   const [status, setStatus] = useState<'all' | OrderStatus>('all')
   const [search, setSearch] = useState('')
 
   const load = useCallback(async () => {
-    const [o, w] = await Promise.all([
-      supabase.from('lh_orders').select('*').order('created_at', { ascending: false }).limit(500),
+    const [o, w, pr] = await Promise.all([
+      supabase
+        .from('lh_orders')
+        .select('*, lh_order_items(product_id,product_name,variant_label,quantity)')
+        .order('created_at', { ascending: false })
+        .limit(500),
       supabase.from('lh_delivery_rates').select('wilaya_code,wilaya_name'),
+      supabase.from('lh_products').select('id,images'),
     ])
     if (o.error) {
       notify('تعذّر تحميل الطلبات: ' + o.error.message, 'error')
       setOrders([])
       return
     }
-    setOrders((o.data ?? []) as Order[])
+    setOrders((o.data ?? []) as OrderRow[])
+    setImages(Object.fromEntries((pr.data ?? []).map((x) => [x.id as string, ((x.images as string[] | null) ?? [])[0] ?? ''])))
     setWilayas(
       Object.fromEntries((w.data ?? []).map((r) => [r.wilaya_code as number, r.wilaya_name as string])),
     )
@@ -48,11 +60,25 @@ export default function Orders() {
       return (
         o.customer_name.toLowerCase().includes(q) ||
         o.customer_phone.includes(q) ||
+        o.lh_order_items.some((i) => i.product_name.toLowerCase().includes(q)) ||
         (o.commune ?? '').toLowerCase().includes(q) ||
         String(o.order_number).includes(q)
       )
     })
   }, [orders, status, search])
+
+  const remove = async (order: OrderRow) => {
+    if (!confirm(`حذف الطلب #${order.order_number} نهائياً؟ لا يمكن التراجع.${['cancelled', 'returned'].includes(order.status) ? '' : '\nسيُعاد المخزون تلقائياً.'}`)) return
+    // Cancelling first puts the reserved stock back (DB trigger), then the row is removed.
+    if (!['cancelled', 'returned'].includes(order.status)) {
+      const r = await supabase.from('lh_orders').update({ status: 'cancelled' }).eq('id', order.id)
+      if (r.error) return notify('فشل الحذف: ' + r.error.message, 'error')
+    }
+    const { error } = await supabase.from('lh_orders').delete().eq('id', order.id)
+    if (error) return notify('فشل الحذف: ' + error.message, 'error')
+    setOrders((list) => list?.filter((o) => o.id !== order.id) ?? list)
+    notify('تم حذف الطلب')
+  }
 
   const changeStatus = async (order: Order, next: OrderStatus) => {
     const prev = order.status
@@ -86,7 +112,7 @@ export default function Orders() {
         </div>
         <input
           className={`${inputCls} mb-4 max-w-xs`}
-          placeholder="بحث بالاسم أو الهاتف أو البلدية أو رقم الطلب…"
+          placeholder="بحث بالاسم أو الهاتف أو المنتج أو البلدية أو رقم الطلب…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -101,11 +127,13 @@ export default function Orders() {
               <thead>
                 <tr className="border-b border-slate-200 text-right text-xs text-slate-500">
                   <th className="p-2 font-semibold">#</th>
+                  <th className="p-2 font-semibold">المنتج</th>
                   <th className="p-2 font-semibold">العميل</th>
                   <th className="p-2 font-semibold">الولاية / البلدية</th>
                   <th className="p-2 font-semibold">الإجمالي</th>
                   <th className="p-2 font-semibold">الحالة</th>
                   <th className="p-2 font-semibold">التاريخ</th>
+                  <th className="p-2 font-semibold"></th>
                 </tr>
               </thead>
               <tbody>
@@ -115,6 +143,30 @@ export default function Orders() {
                       <Link to={`/orders/${o.id}`} className="text-brand-600 hover:underline">
                         {o.order_number}
                       </Link>
+                    </td>
+                    <td className="p-2">
+                      <div className="flex flex-col gap-1.5">
+                        {o.lh_order_items.slice(0, 2).map((i, k) => {
+                          const img = i.product_id ? images[i.product_id] : ''
+                          return (
+                            <div key={k} className="flex items-center gap-2">
+                              {img ? (
+                                <img src={assetUrl(img)} alt="" className="h-10 w-10 shrink-0 rounded-lg border border-slate-200 object-cover" />
+                              ) : (
+                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-lg">🧸</div>
+                              )}
+                              <div className="min-w-0">
+                                <div className="max-w-[180px] truncate text-xs font-semibold text-slate-800">{i.product_name}</div>
+                                <div className="text-[11px] text-slate-500">
+                                  × {i.quantity}
+                                  {i.variant_label ? ` · ${i.variant_label}` : ''}
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })}
+                        {o.lh_order_items.length > 2 && <div className="text-[11px] text-slate-500">+{o.lh_order_items.length - 2} منتجات أخرى</div>}
+                      </div>
                     </td>
                     <td className="p-2">
                       <div className="font-semibold">{o.customer_name}</div>
@@ -146,6 +198,14 @@ export default function Orders() {
                       </select>
                     </td>
                     <td className="p-2 text-xs text-slate-500">{formatDate(o.created_at)}</td>
+                    <td className="whitespace-nowrap p-2">
+                      <button onClick={() => navigate(`/orders/${o.id}?edit=1`)} className="rounded-lg px-2 py-1 text-xs font-bold text-brand-600 hover:bg-brand-50">
+                        ✏️ تعديل
+                      </button>
+                      <button onClick={() => remove(o)} className="rounded-lg px-2 py-1 text-xs font-bold text-rose-600 hover:bg-rose-50">
+                        🗑 حذف
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

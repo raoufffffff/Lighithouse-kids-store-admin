@@ -28,19 +28,22 @@ export default function Abandoned() {
   const notify = useToast()
   const [rows, setRows] = useState<Row[] | null>(null)
   const [wilayas, setWilayas] = useState<Record<number, string>>({})
+  const [fees, setFees] = useState<Record<number, { home: number; desk: number }>>({})
   const [show, setShow] = useState<'open' | 'contacted' | 'dismissed'>('open')
 
   const load = useCallback(async () => {
     const [r, w] = await Promise.all([
       supabase.rpc('lh_abandoned_list'),
-      supabase.from('lh_delivery_rates').select('wilaya_code,wilaya_name'),
+      supabase.from('lh_delivery_rates').select('wilaya_code,wilaya_name,home_fee,desk_fee'),
     ])
     if (r.error) {
       notify(/lh_abandoned_list|schema cache/i.test(r.error.message) ? 'طبّق هجرة الطلبات المتروكة أولاً.' : r.error.message, 'error')
       return setRows([])
     }
     setRows(((r.data ?? []) as Row[]).map((x) => ({ ...x, amount: Number(x.amount) })))
-    setWilayas(Object.fromEntries((w.data ?? []).map((x: { wilaya_code: number; wilaya_name: string }) => [x.wilaya_code, x.wilaya_name])))
+    const rates = (w.data ?? []) as { wilaya_code: number; wilaya_name: string; home_fee: number; desk_fee: number }[]
+    setWilayas(Object.fromEntries(rates.map((x) => [x.wilaya_code, x.wilaya_name])))
+    setFees(Object.fromEntries(rates.map((x) => [x.wilaya_code, { home: Number(x.home_fee), desk: Number(x.desk_fee) }])))
   }, [notify])
   useEffect(() => void load(), [load])
 
@@ -55,7 +58,8 @@ export default function Abandoned() {
 
   if (!rows) return <PageLoader />
   const list = rows.filter((r) => r.status === show)
-  const lost = rows.filter((r) => r.status === 'open').reduce((a, r) => a + r.amount, 0)
+  const feeOf = (r: Row) => (fees[r.wilaya_code] ? (r.delivery_type === 'home' ? fees[r.wilaya_code].home : fees[r.wilaya_code].desk) : 0)
+  const lost = rows.filter((r) => r.status === 'open').reduce((a, r) => a + r.amount + feeOf(r), 0)
   const count = (s: Row['status']) => rows.filter((r) => r.status === s).length
 
   return (
@@ -81,6 +85,7 @@ export default function Abandoned() {
       <div className="space-y-3">
         {list.length === 0 && <p className="text-sm text-slate-500">لا توجد سلات هنا.</p>}
         {list.map((r) => {
+          const fee = fees[r.wilaya_code] ? (r.delivery_type === 'home' ? fees[r.wilaya_code].home : fees[r.wilaya_code].desk) : null
           const msg = encodeURIComponent(`مرحباً ${r.customer_name}، معك لايتهاوس كيدز. لاحظنا أنك اخترت «${r.product_name}» ولم يكتمل طلبك. هل تريد تأكيده؟`)
           return (
             <div key={r.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -88,10 +93,14 @@ export default function Abandoned() {
                 <div className="font-bold text-slate-800">
                   {r.customer_name} {r.in_progress && <span className="mr-1 rounded-full bg-sky-100 px-2 py-0.5 text-xs text-sky-800">لا يزال يملأ…</span>}
                 </div>
-                <div className="text-sm font-bold text-brand-700">{dzd(r.amount)}</div>
+                <div className="text-sm font-bold text-brand-700">{dzd(r.amount + (fee ?? 0))}</div>
               </div>
               <div className="mt-1 text-sm text-slate-600">
                 {r.product_name}{r.variant_label ? ` — ${r.variant_label}` : ''} × {r.qty}
+              </div>
+              <div className="mt-0.5 text-xs text-slate-600">
+                المنتج {dzd(r.amount)}
+                {fee != null && <> + التوصيل <b>{dzd(fee)}</b> ({r.delivery_type === 'home' ? 'للمنزل' : 'للمكتب'}) = <b>{dzd(r.amount + fee)}</b></>}
               </div>
               <div className="text-xs text-slate-500">
                 {wilayas[r.wilaya_code] ?? r.wilaya_code} · {r.commune} · {r.delivery_type === 'home' ? 'للمنزل' : 'للمكتب'} · {formatDate(r.updated_at)}
