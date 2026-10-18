@@ -4,6 +4,7 @@ import Layout from './components/Layout'
 import { PageLoader } from './components/ui'
 import { isConfigured } from './lib/supabase'
 import Delivery from './pages/Delivery'
+import HomeBuilder from './pages/HomeBuilder'
 import Login from './pages/Login'
 import OrderDetail from './pages/OrderDetail'
 import Orders from './pages/Orders'
@@ -48,6 +49,7 @@ export default function App() {
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<Navigate to="/orders" replace />} />
+        <Route path="home" element={<HomeBuilder />} />
         <Route path="orders" element={<Orders />} />
         <Route path="orders/:id" element={<OrderDetail />} />
         <Route path="products" element={<Products />} />

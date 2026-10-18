@@ -20,6 +20,8 @@ export const ERRORS: Record<string, string> = {
   ai_not_configured: 'مفتاح GEMINI_API_KEY غير مضبوط في Supabase.',
   ai_invalid_code: 'لم ينتج الذكاء الاصطناعي كوداً صالحاً بعد محاولتين. أعد المحاولة أو بسّط الطلب.',
   upload_failed: 'فشل رفع الصورة إلى التخزين.',
+  home_empty:
+    'لا توجد منتجات أو فئات بعد ليبني عليها الذكاء الاصطناعي الصفحة.',
   bad_request: 'طلب غير صالح.',
   product_not_found: 'المنتج غير موجود.',
 }

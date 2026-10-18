@@ -12,11 +12,14 @@ export default function PreviewFrame({
   storeUrl,
   payload,
   onPreviewError,
+  path = '/preview',
 }: {
   storeUrl: string
   payload: Record<string, unknown>
   /** Called when the store could not run an AI-designed page (runtime error in the generated code). */
   onPreviewError?: (message: string) => void
+  /** Store route that renders the preview (product page by default). */
+  path?: string
 }) {
   const frameRef = useRef<HTMLIFrameElement>(null)
   const boxRef = useRef<HTMLDivElement>(null)
@@ -125,7 +128,7 @@ export default function PreviewFrame({
           <iframe
             ref={frameRef}
             title="معاينة صفحة المنتج"
-            src={`${origin}/preview`}
+            src={`${origin}${path}`}
             onLoad={send}
             style={{
               width: dw,

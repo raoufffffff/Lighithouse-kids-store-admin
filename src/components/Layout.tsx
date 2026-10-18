@@ -6,6 +6,7 @@ const links = [
   { to: '/orders', label: 'الطلبات', icon: '📦' },
   { to: '/abandoned', label: 'الطلبات المتروكة', icon: '🛒' },
   { to: '/profit', label: 'الربح', icon: '💰' },
+  { to: '/home', label: 'الرئيسية والهيدر', icon: '🏠' },
   { to: '/products', label: 'المنتجات', icon: '🧸' },
   { to: '/products/new', label: 'إضافة منتج', icon: '➕' },
   { to: '/ab', label: 'اختبارات A/B', icon: '🧪' },

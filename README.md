@@ -53,3 +53,7 @@ select id, 'Admin' from auth.users where email = 'you@example.com';
 
 ### بانر إعلاني بالذكاء الاصطناعي
 دالة `lh-design-banner` (وضعان: `brief` و`image`) تولّد صورتين طويلتين بنص عربي مدمج وتخزنهما في `lh-products/banners/`. تستدعيها صفحة «تصميم AI» تسلسلياً (الثانية ترى الأولى لتطابق الأسلوب)، ثم تُمرَّر الروابط إلى `lh-design-page` لتُبنى الصفحة حولها. اختيارياً: السر `GEMINI_IMAGE_MODEL` (الافتراضي `gemini-3.1-flash-image` مع احتياطي `gemini-2.5-flash-image`). الحد: 16 صورة في الساعة.
+
+## Home page & header builder
+
+`/home` in the admin edits the storefront home page and header (hero, banners, products, categories, text, perks, gallery, CTA). Drafts live in `lh_store_settings.home_layout_draft`; publishing writes `home_layout` and refreshes the store. AI design uses the `lh-design-home` Edge Function (same secrets as the other AI functions). Deploy it with `supabase functions deploy lh-design-home`. Keep `src/lib/home-layout.ts` identical to the store repo's copy (apart from the `SUPABASE_URL` import).
