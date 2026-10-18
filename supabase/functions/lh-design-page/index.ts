@@ -145,7 +145,7 @@ async function fetchImage(url: string): Promise<{ mimeType: string; data: string
     const r = await fetch(url, { signal: AbortSignal.timeout(10_000) })
     if (!r.ok) return null
     const buf = new Uint8Array(await r.arrayBuffer())
-    if (buf.length > 4_000_000) return null
+    if (buf.length > 7_000_000) return null
     let bin = ''
     for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000))
     return { mimeType: r.headers.get('content-type')?.split(';')[0] || 'image/jpeg', data: btoa(bin) }
@@ -213,6 +213,10 @@ Deno.serve(async (req) => {
   const request = s(body.request, 1500)
   const currentTsx = s(body.current_tsx, 80_000)
   if (mode === 'edit' && (!currentTsx || !request)) return json({ error: 'bad_request' }, 400)
+  const bannerPrefix = `${SUPABASE_URL}/storage/v1/object/public/lh-products/banners/`
+  const banners = (Array.isArray(body.banners) ? body.banners : [])
+    .filter((u): u is string => typeof u === 'string' && u.startsWith(bannerPrefix) && u.length < 400)
+    .slice(0, 3)
   const tone = typeof body.tone === 'string' && body.tone in TONES ? (body.tone as string) : ''
 
   const key = Deno.env.get('GEMINI_API_KEY')
@@ -250,7 +254,11 @@ Deno.serve(async (req) => {
     .join('\n')
 
   const img = images[0] ? await fetchImage(images[0]) : null
-  const imgPart: Part[] = img ? [{ inlineData: img }] : []
+  const bannerImg = banners[0] ? await fetchImage(banners[0]) : null
+  const imgPart: Part[] = bannerImg ? [{ inlineData: bannerImg }] : img ? [{ inlineData: img }] : []
+  const bannerRule = banners.length
+    ? `\n\nصور بانر إعلانية جاهزة (مرفق أولها كصورة للاطلاع على ألوانها ومزاجها). يجب أن تعرضها بالترتيب نفسه، متلاصقة عمودياً بلا فراغ بينها، بعرض كامل (<img className="block w-full h-auto" />) في أعلى الصفحة، وبعدها نموذج الطلب مباشرة. اكتب الروابط حرفياً كما هي بالضبط:\n${banners.map((u, i) => `${i + 1}. ${u}`).join('\n')}\nصمّم خلفية الصفحة والنموذج بألوان تتناغم مع البانر، ولا تكرر محتواه نصياً. لا تضف أي سعر ثابت.`
+    : ''
 
   try {
     let result: Record<string, unknown>
@@ -262,7 +270,7 @@ Deno.serve(async (req) => {
       const need = requiredBindings(colors.length, sizes.length)
       const brief =
         mode === 'generate'
-          ? `<product_data>\n${facts}\n</product_data>\n\n${tone ? `النبرة: ${TONES[tone]}.\n` : ''}${
+          ? `<product_data>\n${facts}\n</product_data>${bannerRule}\n\n${tone ? `النبرة: ${TONES[tone]}.\n` : ''}${
               request ? `<owner_request>\n${request}\n</owner_request>\n` : 'لا يوجد طلب محدد: صمّم صفحة احترافية جذابة تناسب المنتج.\n'
             }\nصمّم الصفحة كاملة الآن.`
           : `<product_data>\n${facts}\n</product_data>\n\nهذا هو الكود الحالي للصفحة:\n\`\`\`tsx\n${currentTsx}\n\`\`\`\n\n<owner_request>\n${request}\n</owner_request>\n\nعدّل الكود بحسب هذا الطلب فقط، وحافظ على كل ما سواه وعلى كل عناصر checkout/product الموجودة. أعد المكوّن كاملاً.`
@@ -276,6 +284,7 @@ Deno.serve(async (req) => {
         const text = await ask(key, [{ text: `${RULES}\n\n${brief}${fix}` }, ...imgPart], 0.8, 16000)
         tsx = extractCode(text)
         errors = validate(tsx, need)
+        if (mode === 'generate') for (const u of banners) if (!tsx.includes(u)) errors.push(`رابط البانر مفقود حرفياً: ${u}`)
         if (errors.length === 0) break
       }
       if (errors.length) return json({ error: 'ai_invalid_code', details: errors.slice(0, 6) }, 502)

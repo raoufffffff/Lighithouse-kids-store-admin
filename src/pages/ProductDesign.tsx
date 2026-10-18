@@ -84,8 +84,10 @@ export default function ProductDesign() {
   const [tone, setTone] = useState<(typeof TONES)[number]['id']>('friendly')
   const [brief, setBrief] = useState('')
   const [editReq, setEditReq] = useState('')
-  const [busy, setBusy] = useState<'suggest' | 'generate' | 'edit' | 'save' | 'publish' | 'unpublish' | null>(null)
+  const [busy, setBusy] = useState<'suggest' | 'generate' | 'edit' | 'banner' | 'save' | 'publish' | 'unpublish' | null>(null)
   const [aiError, setAiError] = useState('')
+  const [banners, setBanners] = useState<string[]>([])
+  const [bannerStep, setBannerStep] = useState('')
   const [runtimeError, setRuntimeError] = useState('')
   const [showCode, setShowCode] = useState(false)
   const [showVersions, setShowVersions] = useState(false)
@@ -235,12 +237,49 @@ export default function ProductDesign() {
     setBusy(null)
   }
 
+  const makeBanners = async () => {
+    if (!id) return
+    setBusy('banner')
+    setAiError('')
+    setBanners([])
+    const call = async (body: Record<string, unknown>) => {
+      const { data, error } = await supabase.functions.invoke('lh-design-banner', { body: { product_id: id, ...body } })
+      if (!error) return { data: data as Record<string, string> }
+      let code = ''
+      try {
+        const ctx = (error as { context?: Response }).context
+        code = ctx ? ((await ctx.json()) as { error?: string }).error ?? '' : ''
+      } catch {
+        /* ignore */
+      }
+      const unreachable = (error as { name?: string }).name === 'FunctionsFetchError' || /not found/i.test(error.message)
+      return { error: ERRORS[code] ?? (unreachable ? 'تعذّر الوصول إلى دالة البانر. تأكد من نشرها في Supabase.' : error.message) }
+    }
+    try {
+      setBannerStep('تحليل المنتج وكتابة خطة الصور…')
+      const b = await call({ mode: 'brief', notes: brief })
+      if (b.error || !b.data) return setAiError(b.error ?? '')
+      setBannerStep('توليد الصورة الأولى (قد تستغرق دقيقة)…')
+      const one = await call({ mode: 'image', index: 0, prompt: b.data.intro, style_guide: b.data.style_guide })
+      if (one.error || !one.data) return setAiError(one.error ?? '')
+      setBanners([one.data.url])
+      setBannerStep('توليد الصورة الثانية بنفس الأسلوب…')
+      const two = await call({ mode: 'image', index: 1, prompt: b.data.conversion, style_guide: b.data.style_guide, reference_url: one.data.url })
+      if (two.error || !two.data) return setAiError(two.error ?? '')
+      setBanners([one.data.url, two.data.url])
+      notify('جاهز. اضغط «صمّم الصفحة» لتُبنى الصفحة حول البانر.')
+    } finally {
+      setBannerStep('')
+      setBusy(null)
+    }
+  }
+
   const generate = async () => {
     if (!id) return
     if (tsx.trim() && !confirm('سيحلّ التصميم الجديد محلّ الحالي (يمكنك التراجع بعده). المتابعة؟')) return
     setBusy('generate')
     setAiError('')
-    const r = await callDesign({ mode: 'generate', product_id: id, tone, request: brief })
+    const r = await callDesign({ mode: 'generate', product_id: id, tone, request: brief, banners })
     if (r.error) setAiError(r.error)
     else if (typeof r.data?.tsx === 'string') {
       replaceTsx(r.data.tsx)
@@ -460,6 +499,31 @@ export default function ProductDesign() {
             </div>
             {busy === 'generate' && <p className="mt-2 text-xs text-slate-500">يستغرق التصميم عادةً من 20 إلى 60 ثانية…</p>}
             {aiError && <p className="mt-3 rounded-lg bg-rose-50 p-2.5 text-xs font-semibold text-rose-700">{aiError}</p>}
+          </Card>
+
+          <Card title="🖼️ بانر إعلاني بالذكاء الاصطناعي">
+            <p className="mb-3 text-xs text-slate-500">
+              يولّد صورتين طويلتين بنص عربي مدمج (تُعرضان متتاليتين أعلى الصفحة) ثم تُبنى الصفحة حولهما. كل صورة تستغرق نحو دقيقة. تحقّق دائماً من النص العربي داخل الصور.
+            </p>
+            {banners.length > 0 && (
+              <div className="mb-3 flex gap-2">
+                {banners.map((u) => (
+                  <img key={u} src={u} alt="بانر" className="h-40 w-auto rounded-lg border border-slate-200" />
+                ))}
+              </div>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <Button variant="secondary" onClick={makeBanners} loading={busy === 'banner'} disabled={busy !== null}>
+                {banners.length ? 'ولّد بانراً جديداً' : 'ولّد البانر'}
+              </Button>
+              {banners.length === 2 && (
+                <Button onClick={generate} loading={busy === 'generate'} disabled={busy !== null}>صمّم الصفحة حول البانر</Button>
+              )}
+              {banners.length > 0 && busy === null && (
+                <button type="button" className="text-xs font-bold text-rose-600" onClick={() => setBanners([])}>إزالة</button>
+              )}
+            </div>
+            {bannerStep && <p className="mt-2 text-xs text-slate-500">{bannerStep}</p>}
           </Card>
 
           {tsx.trim() && (

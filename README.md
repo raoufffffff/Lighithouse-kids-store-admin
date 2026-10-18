@@ -50,3 +50,6 @@ select id, 'Admin' from auth.users where email = 'you@example.com';
 ## النشر
 ملفا `vercel.json` و `public/_redirects` يتكفّلان بإعادة توجيه المسارات (SPA).
 أضف `VITE_SUPABASE_URL` و `VITE_SUPABASE_ANON_KEY` كمتغيرات بيئة في منصة النشر.
+
+### بانر إعلاني بالذكاء الاصطناعي
+دالة `lh-design-banner` (وضعان: `brief` و`image`) تولّد صورتين طويلتين بنص عربي مدمج وتخزنهما في `lh-products/banners/`. تستدعيها صفحة «تصميم AI» تسلسلياً (الثانية ترى الأولى لتطابق الأسلوب)، ثم تُمرَّر الروابط إلى `lh-design-page` لتُبنى الصفحة حولها. اختيارياً: السر `GEMINI_IMAGE_MODEL` (الافتراضي `gemini-3.1-flash-image` مع احتياطي `gemini-2.5-flash-image`). الحد: 16 صورة في الساعة.
