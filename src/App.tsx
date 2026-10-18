@@ -11,6 +11,7 @@ import Pixels from './pages/Pixels'
 import { AbDetail, AbList } from './pages/AbTests'
 import Abandoned from './pages/Abandoned'
 import Profit from './pages/Profit'
+import ProductOffers from './pages/ProductOffers'
 import ProductDesign from './pages/ProductDesign'
 import ProductForm from './pages/ProductForm'
 import ProductPage from './pages/ProductPage'
@@ -53,6 +54,7 @@ export default function App() {
         <Route path="products/new" element={<ProductForm />} />
         <Route path="products/:id" element={<ProductForm />} />
         <Route path="products/:id/page" element={<ProductPage />} />
+        <Route path="products/:id/offers" element={<ProductOffers />} />
         <Route path="products/:id/design" element={<ProductDesign />} />
         <Route path="abandoned" element={<Abandoned />} />
         <Route path="profit" element={<Profit />} />

@@ -35,6 +35,8 @@ checkout.color: اللون المختار حالياً. checkout.pickColor(name)
 checkout.sizes: مصفوفة نصوص المقاسات، قد تكون فارغة.
 checkout.size: المقاس المختار حالياً. checkout.pickSize(name): لاختيار مقاس. checkout.sizeAvailable(name): هل متوفر.
 checkout.qty / checkout.maxQty: الكمية الحالية وحدها الأقصى. checkout.increase() / checkout.decrease().
+checkout.offers: مصفوفة عروض الكمية المتاحة الآن [{ qty, total, label, saving, perUnit }] (total السعر الإجمالي للعرض، saving التوفير، label عنوان اختياري قد يكون null). قد تكون فارغة، وتختفي العروض تلقائياً إن لم يكفِ المخزون. إن لم تكن فارغة فاعرضها كبطاقات اختيار بارزة قرب الفورم، مع بطاقة «قطعة واحدة» تستدعي checkout.pickOffer(1)، وميّز المطبّق حالياً (checkout.activeOffer أو null) واذكر التوفير بـ checkout.formatPrice(o.saving).
+checkout.pickOffer(qty): لاختيار عرض (يضبط الكمية).
 
 حقول الفورم (كلها controlled، استعمل value مع onChange):
 checkout.name + checkout.setName(text)
