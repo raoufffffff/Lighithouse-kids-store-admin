@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useToast } from '../components/Toast'
 import { Card, PageHeader, PageLoader } from '../components/ui'
 import { dzd } from '../lib/format'
@@ -30,13 +31,7 @@ export default function Profit() {
   const [days, setDays] = useState<number>(30)
   const [rows, setRows] = useState<Row[] | null>(null)
   const [ship, setShip] = useState<{ charged: number; real: number; missing: number; orders: number } | null>(null)
-  const [ads, setAds] = useState(() => {
-    try {
-      return localStorage.getItem('lh_ad_spend') ?? ''
-    } catch {
-      return ''
-    }
-  })
+  const [exp, setExp] = useState<{ ads: number; other: number }>({ ads: 0, other: 0 })
 
   const load = useCallback(async () => {
     setRows(null)
@@ -67,6 +62,16 @@ export default function Profit() {
       }
     }
     setShip({ charged, real, missing, orders: (ordersRes.data ?? []).length })
+    const ex = await supabase
+      .from('lh_expenses')
+      .select('category,amount')
+      .gte('expense_date', from.toISOString().slice(0, 10))
+      .lte('expense_date', new Date().toISOString().slice(0, 10))
+      .limit(5000)
+    let ads = 0
+    let other = 0
+    for (const e of ex.data ?? []) (e.category === 'ads' ? (ads += Number(e.amount)) : (other += Number(e.amount)))
+    setExp({ ads, other })
     const { data, error } = await supabase.rpc('lh_profit_report', { p_from: from.toISOString(), p_to: to.toISOString() })
     if (error) {
       notify(/lh_profit_report|schema cache/i.test(error.message) ? 'طبّق هجرة تقرير الربح أولاً.' : error.message, 'error')
@@ -76,18 +81,9 @@ export default function Profit() {
   }, [days, notify])
   useEffect(() => void load(), [load])
 
-  const setAdSpend = (v: string) => {
-    setAds(v)
-    try {
-      localStorage.setItem('lh_ad_spend', v)
-    } catch {
-      /* ignore */
-    }
-  }
-
   if (!rows) return <PageLoader />
   const sum = (k: 'orders' | 'revenue' | 'cost' | 'profit' | 'returned' | 'delivered') => rows.reduce((a, r) => a + r[k], 0)
-  const adSpend = Number(ads) || 0
+  const adSpend = exp.ads + exp.other
   const shipGap = ship ? ship.charged - ship.real : 0
   const profitAll = sum('profit') + shipGap
   const net = profitAll - adSpend
@@ -104,22 +100,20 @@ export default function Profit() {
             {r.label}
           </button>
         ))}
-        <label className="mr-auto flex items-center gap-2 text-xs font-bold text-slate-600">
-          مصاريف الإعلانات (د.ج)
-          <input type="number" min={0} value={ads} onChange={(e) => setAdSpend(e.target.value)} className="w-32 rounded-lg border border-slate-300 px-2 py-1.5" />
-        </label>
+        <Link to="/expenses" className="mr-auto rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-brand-700 ring-1 ring-slate-200">🧾 إدارة التكاليف</Link>
       </div>
 
-      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-5">
         {[
           ['الإيراد', dzd(sum('revenue'))],
           ['التكلفة', dzd(sum('cost'))],
-          ['الربح قبل الإعلانات', dzd(profitAll)],
-          [adSpend ? 'الربح الصافي' : 'الطلبات', adSpend ? dzd(net) : String(sum('orders'))],
+          ['الربح قبل التكاليف', dzd(profitAll)],
+          [`التكاليف (إعلانات ${dzd(exp.ads)}${exp.other ? ' + أخرى ' + dzd(exp.other) : ''})`, dzd(adSpend)],
+          ['الربح الصافي', dzd(net)],
         ].map(([l, v], i) => (
           <Card key={l}>
             <div className="text-xs text-slate-500">{l}</div>
-            <div className={`mt-1 text-lg font-bold ${i === 3 && adSpend && net < 0 ? 'text-rose-600' : 'text-slate-900'}`}>{v}</div>
+            <div className={`mt-1 text-lg font-bold ${i === 4 && net < 0 ? 'text-rose-600' : 'text-slate-900'}`}>{v}</div>
           </Card>
         ))}
       </div>

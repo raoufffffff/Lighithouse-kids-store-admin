@@ -4,6 +4,8 @@ import Layout from './components/Layout'
 import { PageLoader } from './components/ui'
 import { isConfigured } from './lib/supabase'
 import Delivery from './pages/Delivery'
+import Expenses from './pages/Expenses'
+import Inventory from './pages/Inventory'
 import HomeBuilder from './pages/HomeBuilder'
 import Login from './pages/Login'
 import OrderDetail from './pages/OrderDetail'
@@ -60,6 +62,8 @@ export default function App() {
         <Route path="products/:id/design" element={<ProductDesign />} />
         <Route path="abandoned" element={<Abandoned />} />
         <Route path="profit" element={<Profit />} />
+        <Route path="expenses" element={<Expenses />} />
+        <Route path="inventory" element={<Inventory />} />
         <Route path="ab" element={<AbList />} />
         <Route path="ab/:id" element={<AbDetail />} />
         <Route path="delivery" element={<Delivery />} />
