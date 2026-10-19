@@ -103,17 +103,23 @@ export default function Profit() {
         <Link to="/expenses" className="mr-auto rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-brand-700 ring-1 ring-slate-200">🧾 إدارة التكاليف</Link>
       </div>
 
-      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-5">
+      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
         {[
-          ['الإيراد', dzd(sum('revenue'))],
-          ['التكلفة', dzd(sum('cost'))],
-          ['الربح قبل التكاليف', dzd(profitAll)],
-          [`التكاليف (إعلانات ${dzd(exp.ads)}${exp.other ? ' + أخرى ' + dzd(exp.other) : ''})`, dzd(adSpend)],
-          ['الربح الصافي', dzd(net)],
-        ].map(([l, v], i) => (
-          <Card key={l}>
-            <div className="text-xs text-slate-500">{l}</div>
-            <div className={`mt-1 text-lg font-bold ${i === 4 && net < 0 ? 'text-rose-600' : 'text-slate-900'}`}>{v}</div>
+          { l: 'الإيراد', v: dzd(sum('revenue')), neg: false },
+          { l: 'التكلفة', v: dzd(sum('cost')), neg: false },
+          {
+            l: shipGap < 0 ? 'فرق التوصيل (ما تتحمله)' : 'فرق التوصيل (لصالحك)',
+            v: `${shipGap < 0 ? '−' : shipGap > 0 ? '+' : ''}${dzd(Math.abs(shipGap))}`,
+            neg: shipGap < 0,
+            pos: shipGap > 0,
+          },
+          { l: 'الربح قبل التكاليف', v: dzd(profitAll), neg: false },
+          { l: `التكاليف (إعلانات ${dzd(exp.ads)}${exp.other ? ' + أخرى ' + dzd(exp.other) : ''})`, v: dzd(adSpend), neg: false },
+          { l: 'الربح الصافي', v: dzd(net), neg: net < 0 },
+        ].map((c) => (
+          <Card key={c.l}>
+            <div className="text-xs text-slate-500">{c.l}</div>
+            <div className={`mt-1 text-lg font-bold ${c.neg ? 'text-rose-600' : c.pos ? 'text-emerald-700' : 'text-slate-900'}`}>{c.v}</div>
           </Card>
         ))}
       </div>
