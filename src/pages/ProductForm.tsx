@@ -119,6 +119,11 @@ export default function ProductForm() {
   const [sizes, setSizes] = useState<string[]>([])
   const [combos, setCombos] = useState<Record<string, ComboData>>({})
   const [loadedVariantIds, setLoadedVariantIds] = useState<string[]>([])
+  type StockLink = { stock_item_id: string; qty_per_unit: string }
+  const [stockItems, setStockItems] = useState<{ id: string; name: string; quantity: number; avg_cost: number }[]>([])
+  const [inStock, setInStock] = useState(false)
+  const [links, setLinks] = useState<StockLink[]>([])
+  const linked = inStock && links.some((l) => l.stock_item_id)
 
   const loadCategories = async () => {
     const { data } = await supabase
@@ -131,6 +136,14 @@ export default function ProductForm() {
 
   useEffect(() => {
     loadCategories()
+  }, [])
+
+  const loadStockItems = async () => {
+    const { data } = await supabase.from('lh_stock_items').select('id,name,quantity,avg_cost').order('name').limit(500)
+    setStockItems(((data ?? []) as { id: string; name: string; quantity: number; avg_cost: number }[]).map((x) => ({ ...x, avg_cost: Number(x.avg_cost) })))
+  }
+  useEffect(() => {
+    void loadStockItems()
   }, [])
 
   useEffect(() => {
@@ -147,6 +160,7 @@ export default function ProductForm() {
         .select('*')
         .eq('product_id', id)
         .order('created_at')
+      const { data: ls } = await supabase.from('lh_product_stock_links').select('stock_item_id,qty_per_unit').eq('product_id', id)
       if (cancelled) return
       if (error || !p) {
         notify('المنتج غير موجود', 'error')
@@ -182,6 +196,9 @@ export default function ProductForm() {
       setSizes(uniq(rows.map((v) => v.size ?? '')))
       setCombos(map)
       setLoadedVariantIds(rows.map((v) => v.id as string))
+      const lrows = (ls ?? []) as { stock_item_id: string; qty_per_unit: number }[]
+      setLinks(lrows.map((l) => ({ stock_item_id: l.stock_item_id, qty_per_unit: String(l.qty_per_unit) })))
+      setInStock(lrows.length > 0)
       setLoading(false)
     })()
     return () => {
@@ -302,6 +319,13 @@ export default function ProductForm() {
       }
     }
 
+    const cleanLinks = inStock ? links.filter((l) => l.stock_item_id) : []
+    if (new Set(cleanLinks.map((l) => l.stock_item_id)).size !== cleanLinks.length) return notify('عنصر مخزون مكرر في الربط.', 'error')
+    for (const l of cleanLinks) {
+      const n = Number(l.qty_per_unit)
+      if (!Number.isInteger(n) || n < 1) return notify('كمية العنصر لكل قطعة يجب أن تكون عدداً صحيحاً ≥ 1.', 'error')
+    }
+
     setSaving(true)
     const payload = {
       name: name.trim(),
@@ -310,7 +334,7 @@ export default function ProductForm() {
       category_id: categoryId || null,
       base_price: price,
       compare_at_price: toNumberOrNull(comparePrice),
-      cost_price: toNumberOrNull(costPrice),
+      ...(linked ? {} : { cost_price: toNumberOrNull(costPrice) }),
       sku: sku.trim() || null,
       images,
       landing_images: landingImages,
@@ -359,6 +383,17 @@ export default function ProductForm() {
         ? await supabase.from('lh_product_variants').update(row).eq('id', v.id)
         : await supabase.from('lh_product_variants').insert(row)
       if (error) return fail(error.message)
+    }
+
+    // Stock links: replace the product's links, then let the database recompute cost and availability.
+    {
+      const del = await supabase.from('lh_product_stock_links').delete().eq('product_id', productId)
+      if (del.error) return fail(del.error.message)
+      if (cleanLinks.length) {
+        const ins = await supabase.from('lh_product_stock_links').insert(cleanLinks.map((l) => ({ product_id: productId, stock_item_id: l.stock_item_id, qty_per_unit: Number(l.qty_per_unit) })))
+        if (ins.error) return fail(ins.error.message)
+        await supabase.rpc('lh_recalc_product', { p_product: productId })
+      }
     }
 
     void refreshStore()
@@ -572,6 +607,8 @@ export default function ProductForm() {
                             step="1"
                             className={inputCls}
                             value={v.stock_quantity}
+                            disabled={linked}
+                            title={linked ? 'يُحسب تلقائياً من المخزون المرتبط' : undefined}
                             onChange={(e) => updateCombo(c.key, { stock_quantity: e.target.value })}
                           />
                         </Field>
@@ -633,10 +670,80 @@ export default function ProductForm() {
               <Field label="السعر قبل الخصم" hint="يظهر مشطوباً في المتجر">
                 <input type="number" min="0" className={inputCls} value={comparePrice} onChange={(e) => setComparePrice(e.target.value)} />
               </Field>
-              <Field label="سعر التكلفة" hint="للإدارة فقط">
-                <input type="number" min="0" className={inputCls} value={costPrice} onChange={(e) => setCostPrice(e.target.value)} />
+              <Field label="سعر التكلفة" hint={linked ? 'يُحسب تلقائياً من متوسط تكلفة عناصر المخزون' : 'للإدارة فقط'}>
+                <input type="number" min="0" className={inputCls} value={costPrice} disabled={linked} onChange={(e) => setCostPrice(e.target.value)} />
               </Field>
             </div>
+          </Card>
+
+          <Card title="🏬 المخزون">
+            <p className="mb-3 text-sm font-semibold">هل المنتج موجود في المخزون؟</p>
+            <div className="mb-3 flex gap-2">
+              {[{ v: true, l: 'نعم' }, { v: false, l: 'لا' }].map((o) => (
+                <button
+                  key={String(o.v)}
+                  type="button"
+                  onClick={() => {
+                    setInStock(o.v)
+                    if (o.v && links.length === 0) setLinks([{ stock_item_id: '', qty_per_unit: '1' }])
+                  }}
+                  className={`rounded-full px-4 py-1.5 text-xs font-bold ${inStock === o.v ? 'bg-brand-600 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200'}`}
+                >
+                  {o.l}
+                </button>
+              ))}
+            </div>
+            {inStock && (
+              <div className="space-y-2">
+                <p className="text-xs text-slate-500">يمكن أن يتكوّن المنتج من عنصرين أو أكثر من المخزون. ينقص المخزون عند تأكيد الطلب فقط، وتُحسب التكلفة من متوسط تكلفة العناصر.</p>
+                {links.map((l, k) => (
+                  <div key={k} className="flex items-center gap-2">
+                    <select
+                      className={inputCls}
+                      value={l.stock_item_id}
+                      onChange={(e) => setLinks((arr) => arr.map((x, j) => (j === k ? { ...x, stock_item_id: e.target.value } : x)))}
+                    >
+                      <option value="">— اختر عنصراً —</option>
+                      {stockItems.map((it) => (
+                        <option key={it.id} value={it.id}>{it.name} ({it.quantity})</option>
+                      ))}
+                    </select>
+                    <input
+                      type="number"
+                      min="1"
+                      title="الكمية المستهلكة من هذا العنصر لكل قطعة تُباع"
+                      className={inputCls + ' !w-20'}
+                      value={l.qty_per_unit}
+                      onChange={(e) => setLinks((arr) => arr.map((x, j) => (j === k ? { ...x, qty_per_unit: e.target.value } : x)))}
+                    />
+                    <button type="button" className="text-rose-600" aria-label="حذف" onClick={() => setLinks((arr) => arr.filter((_, j) => j !== k))}>✕</button>
+                  </div>
+                ))}
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="secondary" onClick={() => setLinks((arr) => [...arr, { stock_item_id: '', qty_per_unit: '1' }])}>➕ عنصر آخر</Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={async () => {
+                      const n = name.trim()
+                      if (!n) return notify('أدخل اسم المنتج أولاً.', 'error')
+                      const found = stockItems.find((x) => x.name.trim().toLowerCase() === n.toLowerCase())
+                      let itemId = found?.id
+                      if (!itemId) {
+                        const r = await supabase.from('lh_stock_items').insert({ name: n }).select('id').single()
+                        if (r.error) return notify(r.error.message, 'error')
+                        itemId = r.data.id as string
+                        await loadStockItems()
+                      }
+                      setLinks((arr) => [...arr.filter((x) => x.stock_item_id), { stock_item_id: itemId!, qty_per_unit: '1' }])
+                    }}
+                  >
+                    ✨ إنشاء عنصر بنفس اسم المنتج
+                  </Button>
+                </div>
+                <p className="text-xs text-slate-500">الرقم الصغير = عدد وحدات العنصر المستهلكة لكل قطعة تُباع. سجّل المشتريات من صفحة «المخزون».</p>
+              </div>
+            )}
           </Card>
 
           <Card title="الفئة">

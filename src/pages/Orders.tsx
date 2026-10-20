@@ -68,7 +68,7 @@ export default function Orders() {
   }, [orders, status, search])
 
   const remove = async (order: OrderRow) => {
-    if (!confirm(`حذف الطلب #${order.order_number} نهائياً؟ لا يمكن التراجع.${['cancelled', 'returned'].includes(order.status) ? '' : '\nسيُعاد المخزون تلقائياً.'}`)) return
+    if (!confirm(`حذف الطلب #${order.order_number} نهائياً؟ لا يمكن التراجع.${['confirmed', 'shipped', 'delivered'].includes(order.status) ? '\nسيُعاد المخزون تلقائياً.' : ''}`)) return
     // Cancelling first puts the reserved stock back (DB trigger), then the row is removed.
     if (!['cancelled', 'returned'].includes(order.status)) {
       const r = await supabase.from('lh_orders').update({ status: 'cancelled' }).eq('id', order.id)

@@ -32,6 +32,7 @@ export default function Profit() {
   const [rows, setRows] = useState<Row[] | null>(null)
   const [ship, setShip] = useState<{ charged: number; real: number; missing: number; orders: number } | null>(null)
   const [exp, setExp] = useState<{ ads: number; other: number }>({ ads: 0, other: 0 })
+  const [stock, setStock] = useState<{ invested: number; current: number }>({ invested: 0, current: 0 })
 
   const load = useCallback(async () => {
     setRows(null)
@@ -44,7 +45,7 @@ export default function Profit() {
         .select('delivery_fee,wilaya_code,delivery_type,status')
         .gte('created_at', from.toISOString())
         .lt('created_at', to.toISOString())
-        .not('status', 'in', '(cancelled,returned,unreachable)')
+        .in('status', ['confirmed', 'shipped', 'delivered'])
         .limit(5000),
       supabase.from('lh_delivery_costs').select('wilaya_code,home_cost,desk_cost'),
     ])
@@ -72,6 +73,17 @@ export default function Profit() {
     let other = 0
     for (const e of ex.data ?? []) (e.category === 'ads' ? (ads += Number(e.amount)) : (other += Number(e.amount)))
     setExp({ ads, other })
+    // Stock: what was invested (purchases in the period) and what is still on the shelf (at average cost).
+    const [pur, itm] = await Promise.all([
+      supabase.from('lh_stock_purchases').select('quantity,unit_cost')
+        .gte('purchased_at', from.toISOString().slice(0, 10))
+        .lte('purchased_at', new Date().toISOString().slice(0, 10)).limit(5000),
+      supabase.from('lh_stock_items').select('quantity,avg_cost').limit(5000),
+    ])
+    setStock({
+      invested: (pur.data ?? []).reduce((a, r) => a + Number(r.quantity) * Number(r.unit_cost), 0),
+      current: (itm.data ?? []).reduce((a, r) => a + Math.max(0, Number(r.quantity)) * Number(r.avg_cost), 0),
+    })
     const { data, error } = await supabase.rpc('lh_profit_report', { p_from: from.toISOString(), p_to: to.toISOString() })
     if (error) {
       notify(/lh_profit_report|schema cache/i.test(error.message) ? 'طبّق هجرة تقرير الربح أولاً.' : error.message, 'error')
@@ -93,7 +105,7 @@ export default function Profit() {
 
   return (
     <div>
-      <PageHeader title="💰 الربح الحقيقي" subtitle="الإيراد ناقص تكلفة المنتج، مع فرق التوصيل (ما دفعه الزبون ناقص ما تدفعه لشركة التوصيل)، بدون الطلبات الملغاة والمرجعة وغير المردودة. تكلفة شحن المرجعات لا تُحتسب." />
+      <PageHeader title="💰 الربح الحقيقي" subtitle="الإيراد من الطلبات المؤكدة فقط (مؤكد، تم الشحن، تم التسليم) ناقص تكلفة ما بيع من المخزون، مع فرق التوصيل (ما دفعه الزبون ناقص ما تدفعه لشركة التوصيل). «المستثمر في المخزون» مبلغ المشتريات في الفترة، و«الربح الصافي» يحسب تكلفة ما بيع فقط." />
       <div className="mb-4 flex flex-wrap items-center gap-2">
         {RANGES.map((r) => (
           <button key={r.id} onClick={() => setDays(r.id)} className={`rounded-full px-3 py-1.5 text-xs font-bold ${days === r.id ? 'bg-brand-600 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200'}`}>
@@ -103,19 +115,21 @@ export default function Profit() {
         <Link to="/expenses" className="mr-auto rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-brand-700 ring-1 ring-slate-200">🧾 إدارة التكاليف</Link>
       </div>
 
-      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
         {[
-          { l: 'الإيراد', v: dzd(sum('revenue')), neg: false },
-          { l: 'التكلفة', v: dzd(sum('cost')), neg: false },
+          { l: 'الإيراد (الطلبات المؤكدة)', v: dzd(sum('revenue')) },
+          { l: 'المستثمر في المخزون (مشتريات الفترة)', v: dzd(stock.invested) },
+          { l: 'تكلفة ما بيع من المخزون', v: dzd(sum('cost')) },
           {
             l: shipGap < 0 ? 'فرق التوصيل (ما تتحمله)' : 'فرق التوصيل (لصالحك)',
             v: `${shipGap < 0 ? '−' : shipGap > 0 ? '+' : ''}${dzd(Math.abs(shipGap))}`,
             neg: shipGap < 0,
             pos: shipGap > 0,
           },
-          { l: 'الربح قبل التكاليف', v: dzd(profitAll), neg: false },
-          { l: `التكاليف (إعلانات ${dzd(exp.ads)}${exp.other ? ' + أخرى ' + dzd(exp.other) : ''})`, v: dzd(adSpend), neg: false },
+          { l: 'الربح قبل التكاليف', v: dzd(profitAll), neg: profitAll < 0 },
+          { l: `التكاليف (إعلانات ${dzd(exp.ads)}${exp.other ? ' + أخرى ' + dzd(exp.other) : ''})`, v: dzd(adSpend) },
           { l: 'الربح الصافي', v: dzd(net), neg: net < 0 },
+          { l: 'قيمة المخزون المتبقي الآن', v: dzd(stock.current) },
         ].map((c) => (
           <Card key={c.l}>
             <div className="text-xs text-slate-500">{c.l}</div>

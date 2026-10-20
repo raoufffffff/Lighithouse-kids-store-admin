@@ -20,6 +20,7 @@ import ProductForm from './pages/ProductForm'
 import ProductPage from './pages/ProductPage'
 import Products from './pages/Products'
 import StoreSettings from './pages/StoreSettings'
+import Visits from './pages/Visits'
 
 export default function App() {
   const { session, isAdmin, loading } = useAuth()
@@ -53,6 +54,7 @@ export default function App() {
         <Route index element={<Navigate to="/orders" replace />} />
         <Route path="home" element={<HomeBuilder />} />
         <Route path="orders" element={<Orders />} />
+        <Route path="visits" element={<Visits />} />
         <Route path="orders/:id" element={<OrderDetail />} />
         <Route path="products" element={<Products />} />
         <Route path="products/new" element={<ProductForm />} />

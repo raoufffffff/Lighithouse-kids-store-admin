@@ -133,23 +133,12 @@ export default function OrderDetail() {
     setSaving(true)
     const upd = newItems(draft)
     const changed = upd.filter((i, k) => i.quantity !== items[k].quantity)
-    // Stock follows the quantity change unless the order has already released its stock.
-    const holdsStock = !['cancelled', 'returned'].includes(order.status)
+    // Stock follows the quantity change automatically (database trigger) while the order is confirmed.
     for (const i of changed) {
       const { error } = await supabase.from('lh_order_items').update({ quantity: i.quantity, line_total: i.line_total }).eq('id', i.id)
       if (error) {
         setSaving(false)
         return notify('فشل تعديل الكمية: ' + error.message, 'error')
-      }
-      const old = items.find((x) => x.id === i.id)!
-      if (holdsStock && i.variant_id) {
-        const { data: v } = await supabase.from('lh_product_variants').select('stock_quantity').eq('id', i.variant_id).maybeSingle()
-        if (v) {
-          await supabase
-            .from('lh_product_variants')
-            .update({ stock_quantity: Math.max(0, Number(v.stock_quantity) - (i.quantity - old.quantity)) })
-            .eq('id', i.variant_id)
-        }
       }
     }
     const fields = {
@@ -175,7 +164,7 @@ export default function OrderDetail() {
   }
 
   const removeOrder = async () => {
-    if (!confirm(`حذف الطلب #${order.order_number} نهائياً؟ لا يمكن التراجع.${['cancelled', 'returned'].includes(order.status) ? '' : '\nسيُعاد المخزون تلقائياً.'}`)) return
+    if (!confirm(`حذف الطلب #${order.order_number} نهائياً؟ لا يمكن التراجع.${['confirmed', 'shipped', 'delivered'].includes(order.status) ? '\nسيُعاد المخزون تلقائياً.' : ''}`)) return
     if (!['cancelled', 'returned'].includes(order.status)) {
       const r = await supabase.from('lh_orders').update({ status: 'cancelled' }).eq('id', order.id)
       if (r.error) return notify('فشل الحذف: ' + r.error.message, 'error')
@@ -322,7 +311,7 @@ export default function OrderDetail() {
                   <Button onClick={saveEdit} loading={saving}>حفظ التعديلات</Button>
                   <Button variant="secondary" onClick={stopEdit}>إلغاء</Button>
                 </div>
-                <p className="text-xs text-slate-500">تغيير الولاية أو نوع التوصيل يقترح سعر الموقع تلقائياً ويمكنك تعديله. تعديل الكمية يعدّل المخزون معه.</p>
+                <p className="text-xs text-slate-500">تغيير الولاية أو نوع التوصيل يقترح سعر الموقع تلقائياً ويمكنك تعديله. تعديل الكمية يعدّل المخزون معه إن كان الطلب مؤكداً.</p>
               </div>
             ) : (
             <dl className="grid gap-3 text-sm sm:grid-cols-2">
